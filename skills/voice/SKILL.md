@@ -34,7 +34,7 @@ when needed. `ww tts --voices` lists models, prices and voices without spending 
 ## Model
 
 Default: **`elevenlabs/eleven-multilingual-v2`** at `speed` 1.12, the long-form narration model.
-It honours `<break>`, `style` and `speed`, and George lands at ~190–200 wpm. Use it.
+It honours `<break>`, `style` and `speed`, and the default voice lands at ~190–205 wpm. Use it.
 
 `elevenlabs/eleven-v4` is more emotive and takes inline audio tags, but it has no speed control
 and reads at ~150–165 wpm with every voice we measured, well below the pace target. Pick it only
@@ -46,19 +46,27 @@ for a deliberately slow, intimate piece, and direct it with tags (below), since 
 Match the topic and the person asking, not a default. Settle it in one pass and write it into
 `plan.voice.voice_id` as one of OpenRouter's premade names (an ElevenLabs voice id also works):
 
-| Content | Voice qualities | Voices |
+**Default to American voices.** A clear US accent is the easiest for the widest audience to follow.
+Use a British or other accent only when the person asks for it or the subject clearly calls for it
+(e.g. a video in British English about British history).
+
+| Content | Voice qualities | Voices (American first) |
 | --- | --- | --- |
-| Math, physics, "why is this true" | warm, curious, unhurried | `george` (warm British storyteller, default), `alice` (clear British educator), `brian` (deep, resonant US) |
-| Science, history, explainers for everyone | clear, friendly | `matilda` (knowledgeable US), `daniel` (steady British broadcaster), `lily` (warm British), `bella` (bright US) |
-| Tech, product, company explainers | confident, modern, conversational | `eric` (smooth US), `chris` (down-to-earth US), `roger` (laid-back US), `sarah` (reassuring US) |
-| "Like I'm 10", playful topics | bright, warm | `jessica`, `will`, `laura`, `charlie` (Australian, energetic) |
-| Serious subjects (health, conflict, loss) | calm, low-key, no hype | `river` (neutral, relaxed), `daniel`, `alice` |
+| Math, physics, "why is this true" | warm, curious, unhurried | `brian` (deep, resonant US, **default**), `eric` (smooth US), `matilda` (clear, knowledgeable US) |
+| Science, history, explainers for everyone | clear, friendly | `matilda`, `eric`, `sarah` (warm, reassuring US), `bella` (bright US) |
+| Tech, product, company explainers | confident, modern, conversational | `eric`, `chris` (down-to-earth US, speed 1.05), `roger` (laid-back US, speed 1.05), `sarah` |
+| "Like I'm 10", playful topics | bright, warm | `jessica`, `will`, `laura` (all US) |
+| Serious subjects (health, conflict, loss) | calm, low-key, no hype | `sarah`, `river` (neutral, relaxed), `brian` |
+| Only when asked for a British/other accent | | `george`, `alice`, `daniel`, `lily` (British), `charlie` (Australian) |
+
+Measured on multilingual-v2 at speed 1.12 with the same flowing script: brian ~203 wpm, eric ~209,
+matilda ~206, sarah ~200, chris ~224 and roger ~216 (use speed 1.05 for those two).
 
 Skip the character voices (`callum`, `harry`) for narration. Respect explicit requests (gender,
 accent, language, a named voice). For non-English videos, set `plan.voice.language` (ISO-639-1)
 and write the narration in that language.
 
-`plan.voice` defaults: `voice_id` `george`, `model_id` as above, `stability` 0.45,
+`plan.voice` defaults: `voice_id` `brian`, `model_id` as above, `stability` 0.45,
 `similarity_boost` 0.8, `style` 0.15, `speed` 1.12, `max_pause` 0.7. Add `seed` (an integer)
 for repeatable takes.
 

@@ -76,15 +76,15 @@ DEFAULTS = {
     "stability": 0.45,
     "similarity_boost": 0.8,
     "style": 0.15,
-    "speed": 1.12,           # George on multilingual-v2: ~170 wpm at 1.0, ~190-200 at 1.12
+    "speed": 1.12,           # multilingual-v2: ~170 wpm at 1.0, ~200-210 at 1.12 for the US default voices
     "use_speaker_boost": True,
     "max_pause": 0.7,        # natural pauses are compressed and capped here (explicit <break/>s are kept)
     "stt_model": "elevenlabs/scribe-v2",
     "say_voice": "Daniel",
     "say_rate": 182,
 }
-DEFAULT_VOICE = "george"                    # warm, measured British storyteller (premade)
-DEFAULT_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"   # the same voice by ElevenLabs id (direct API)
+DEFAULT_VOICE = "brian"                     # deep, resonant American narrator (premade)
+DEFAULT_VOICE_ID = "nPczCjzI2devNBz1zQrb"   # the same voice by ElevenLabs id (direct API)
 # Premade voices OpenRouter accepts by name (GET /api/v1/models?output_modalities=speech →
 # supported_voices). Any ElevenLabs voice id also works; cloned/designed voices need BYOK.
 OR_VOICES = ("george", "sarah", "adam", "alice", "bella", "bill", "brian", "callum", "charlie",

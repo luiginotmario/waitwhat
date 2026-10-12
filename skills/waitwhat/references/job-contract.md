@@ -31,7 +31,7 @@ they create a job dir and run the agent with that dir as cwd.
 - `.waitwhat/usage.json` (extra, optional) accumulates billable narration usage across `ww tts`
   runs, for the worker's cost accounting: `{"openrouter_audio_cost_usd": 0.0124,
   "tts_characters": 296, "stt_seconds": 16.7, "tts_model": "elevenlabs/eleven-multilingual-v2",
-  "voice": "george", "elevenlabs_characters": 296}`. `openrouter_audio_cost_usd` is the measured
+  "voice": "brian", "elevenlabs_characters": 296}`. `openrouter_audio_cost_usd` is the measured
   OpenRouter cost (speech + transcription) in USD; `tts_characters` counts every character sent
   for synthesis, through any provider; `elevenlabs_characters` is a legacy alias of it.
 - `manifest.json` is written by `ww stitch` from plan.json. `narration` is the plain spoken
