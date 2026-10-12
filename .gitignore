@@ -1,0 +1,17 @@
+# toolchain + caches (scripts/setup.sh recreates them)
+.venv/
+.cache/
+__pycache__/
+*.pyc
+media/
+.media/
+
+# local videos made with the plugin
+waitwhat-videos/
+
+# secrets
+.env
+.env.*
+
+.DS_Store
+.ruff_cache/

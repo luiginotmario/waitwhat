@@ -1,0 +1,85 @@
+# Job I/O contract and workspace layout
+
+The worker (Claude Agent SDK), the Mac app and local Claude Code all drive waitwhat the same way:
+they create a job dir and run the agent with that dir as cwd.
+
+```
+<job>/
+  request.json              {prompt, attachments:[{path,name,mime}], refine?:{text, at_seconds, frame_path}}
+  inputs/                   downloaded attachments (+ the refine frame png)
+  workspace/                previous version's workspace when refining; otherwise empty
+  .waitwhat/progress.json   written ONLY via `ww progress …`; the worker polls it
+  out/video.mp4             REQUIRED  1920x1080, h264 + aac
+  out/thumbnail.jpg         REQUIRED
+  out/manifest.json         REQUIRED  {title, scenes:[{index,title,narration,start,duration}]}
+```
+
+- Paths inside `request.json` are relative to the job dir.
+- After success the worker tars `workspace/` (it becomes the starting point of the next refine)
+  and uploads `out/*`. Keep `workspace/` self-contained and reasonably small: no Manim media
+  caches (render.py deletes them), no copies of `out/`.
+- `progress.json` shape: `{stage, message, scenes:[{index,title,status}]}` with stage in
+  understanding → research → script → voice → animating → stitching → done and scene status in
+  pending | rendering | done | failed. Scene `index` is 1-based and matches the manifest.
+- `.waitwhat/usage.json` (extra, optional) accumulates billable usage, e.g.
+  `{"elevenlabs_characters": 954}`, for the worker's cost accounting.
+- `manifest.json` is written by `ww stitch` from plan.json. `narration` is the plain spoken
+  text (markup stripped); `start`/`duration` are seconds in the final video (after the intro).
+
+A run is finished only when `ww check` passes and progress is `done`. If you cannot produce a
+video at all, write `ww progress stage done "<what went wrong, in plain words>"` and say so; never
+leave a half-written `out/`.
+
+## workspace/ layout (ours; the worker treats it as opaque)
+
+```
+workspace/
+  plan.json            the single source of truth (below)
+  research/            fetched sources (*.md with source headers) + notes.md
+  scenes/<id>.py       one WaitwhatScene per file; file stem = scene id
+  scenes/shared.py     objects/constructors reused across scenes (continuity)
+  audio/<id>.wav|json  narration + word timings + bookmark times (ww tts)
+  renders/<id>.mp4|json  rendered scenes + content hash (ww render)
+  frames/<id>_*.jpg    review frames + <id>_sheet.jpg contact sheet
+  logs/                render logs, layout lint, probes
+  timeline.json        final segment times (ww stitch), used by refine
+  thumbnail.png        optional custom thumbnail (a rendered still)
+  versions.md          one line per version: what changed and why (refines append)
+```
+
+## plan.json
+
+(The `//` comments below are explanations; the real file is plain JSON.)
+
+```json
+{
+  "title": "Why the Pythagorean theorem is true",
+  "mode": "topic",                       // topic | attachments | company | refine (mixes allowed)
+  "question": "Why should the squares on the two short sides add up to the square on the long side?",
+  "audience": "curious adult, no algebra needed beyond squaring",
+  "aha": "The same four triangles leave behind either a² + b² or c², so they must be equal.",
+  "duration_target": 150,
+  "voice": {"backend": "auto", "voice_id": "…", "voice_name": "…", "model_id": "eleven_multilingual_v2",
+            "stability": 0.45, "similarity_boost": 0.8, "style": 0.15, "speed": 1.0,
+            "say_voice": "Daniel", "say_rate": 182},
+  "pronunciations": {"Euler": "Oiler"},
+  "palette": {"a": "BLUE", "b": "TEAL", "c": "YELLOW_SOFT", "triangle": "GREY"},
+  "sound": {"music": "calm", "music_db": -17, "sfx": true, "intro": true, "outro": true},
+  "thumbnail": {"scene": "rearrange", "t": 9.5},
+  "scenes": [
+    {
+      "id": "hook",                      // stable slug; never renumber ids, only reorder
+      "title": "A 2,500-year-old claim",
+      "goal": "Make the viewer want to know why a² + b² = c² could possibly be true.",
+      "narration": "Take any right triangle … <bookmark mark=\"squares\"/> build a square on each side …",
+      "visual": "Right triangle fades up; three squares grow off its sides in their concept colours …",
+      "transition": "cut",               // how THIS scene is entered: continuous (starts on the previous scene's last frame, no whoosh) | cut
+      "lead_in": 0.35                    // optional seconds before narration starts
+    }
+  ],
+  "sources": [{"title": "…", "url": "…", "used_for": "…"}]
+}
+```
+
+Rules of thumb: ids are short kebab-case and stable across refines (insert "hook-2", don't
+renumber). Keep `palette` complete for every concept that appears in more than one scene.

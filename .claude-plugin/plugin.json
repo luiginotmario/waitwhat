@@ -1,0 +1,13 @@
+{
+  "name": "waitwhat",
+  "version": "0.1.0",
+  "description": "Turn any prompt, document or company URL into a narrated, animated explainer video: dark-background math-animation style, Manim scenes timed to a natural voice, music, one mp4. Pause, circle what confused you, ask \"wait, what?\" and it rebuilds that part.",
+  "author": {
+    "name": "Luigi Rivolta",
+    "email": "luigi@luigirivolta.com"
+  },
+  "homepage": "https://github.com/luiginotmario/waitwhat",
+  "repository": "https://github.com/luiginotmario/waitwhat",
+  "license": "MIT",
+  "keywords": ["explainer", "video", "manim", "animation", "education", "narration", "tts"]
+}

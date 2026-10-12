@@ -1,0 +1,14 @@
+{
+  "name": "waitwhat",
+  "description": "The waitwhat explainer-video plugin.",
+  "owner": {
+    "name": "Luigi Rivolta"
+  },
+  "plugins": [
+    {
+      "name": "waitwhat",
+      "source": "./",
+      "description": "Prompt, document or company URL \u2192 narrated animated explainer video. Refine any moment with \"wait, what?\"."
+    }
+  ]
+}

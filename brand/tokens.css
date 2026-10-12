@@ -1,0 +1,208 @@
+/*
+ * waitwhat brand tokens
+ * Source of truth for the web app and the Mac widget. See README.md for the rules.
+ *
+ * Structure is Apple (system type, materials, springs). The pencil is the accent layer.
+ * Light = graphite on paper. Dark = chalk on blackboard.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Paper */
+  --ww-paper: #fbfaf6;
+  --ww-paper-raised: #ffffff;
+  --ww-paper-sunken: #f3f1ea;
+
+  /* Graphite scale (text + strokes) */
+  --ww-ink: #1c1d20;
+  --ww-graphite-1: #3a3c41;
+  --ww-graphite-2: #63666d;
+  --ww-graphite-3: #8e9197;
+  --ww-graphite-4: #c0c2c6;
+  --ww-graphite-5: #e2e2e0;
+
+  /* Pencil decoration strokes */
+  --ww-pencil: #34363b;
+  --ww-pencil-soft: rgb(52 54 59 / 0.42);
+  --ww-pencil-faint: rgb(52 54 59 / 0.2);
+
+  /* Graph paper */
+  --ww-grid-minor: rgb(60 90 125 / 0.075);
+  --ww-grid-major: rgb(60 90 125 / 0.13);
+  --ww-grid-size: 24px;
+  --ww-grid-major-size: 120px;
+
+  /* 3b1b accents. `*-ink` variants are tuned for text/strokes on paper (WCAG AA). */
+  --ww-blue: #58c4dd;
+  --ww-blue-ink: #1b7a93;
+  --ww-yellow: #f5d90a;
+  --ww-yellow-ink: #806a00;
+  --ww-yellow-highlight: rgb(255 238 0 / 0.38);
+  --ww-green: #83c167;
+  --ww-green-ink: #3b7a27;
+  --ww-red: #fc6255;
+  --ww-red-ink: #c4372b;
+  /* The raw 3b1b colours, for drawing on top of video frames (always dark backgrounds). */
+  --ww-video-yellow: #ffff00;
+  --ww-video-blue: #58c4dd;
+  --ww-video-red: #fc6255;
+  --ww-video-bg: #000000;
+
+  /* Controls */
+  --ww-button-bg: var(--ww-ink);
+  --ww-button-fg: #fbfaf6;
+  --ww-fill-hover: rgb(28 29 32 / 0.06);
+  --ww-fill-press: rgb(28 29 32 / 0.1);
+  --ww-focus-ring: rgb(27 122 147 / 0.55);
+
+  /* Materials (backdrop-filter layers) */
+  --ww-material: rgb(251 250 246 / 0.72);
+  --ww-material-thick: rgb(251 250 246 / 0.86);
+  --ww-material-edge: rgb(255 255 255 / 0.7);
+  --ww-material-dark: rgb(18 18 20 / 0.5); /* player chrome: always over video */
+  --ww-material-blur: blur(20px) saturate(180%);
+  --ww-scrim: rgb(24 26 28 / 0.28);
+
+  /* Elevation */
+  --ww-shadow-card: 0 1px 1px rgb(20 22 26 / 0.04), 0 6px 24px -6px rgb(20 22 26 / 0.1);
+  --ww-shadow-float: 0 1px 2px rgb(20 22 26 / 0.06), 0 18px 48px -12px rgb(20 22 26 / 0.22);
+
+  /* Type */
+  --ww-font-ui: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", sans-serif;
+  --ww-font-hand: var(--ww-font-hand-web, "Architects Daughter"), "Bradley Hand", "Segoe Print", cursive;
+  --ww-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Motion: custom curves only, UI under 300ms */
+  --ww-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ww-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ww-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ww-dur-press: 140ms;
+  --ww-dur-fast: 150ms;
+  --ww-dur-base: 200ms;
+  --ww-dur-modal: 250ms;
+  /* Critically damped spring (damping 1.0, response 0.32s) as a CSS easing, for modals and sheets. */
+  --ww-spring: linear(0, 0.0394, 0.1291, 0.2395, 0.3531, 0.4602, 0.5563, 0.6396, 0.71, 0.7686, 0.8165, 0.8554, 0.8866, 0.9114, 0.9311, 0.9466, 0.9587, 0.9682, 0.9755, 0.9812, 0.9856, 0.989, 0.9916, 0.9936, 1);
+  --ww-spring-dur: 380ms;
+
+  /* Shape */
+  --ww-radius-s: 8px;
+  --ww-radius-m: 12px;
+  --ww-radius-l: 18px;
+  --ww-radius-xl: 24px;
+  --ww-radius-pill: 999px;
+}
+
+/* Blackboard. Applied when the system is dark unless the page forces light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ww-paper: #151918;
+    --ww-paper-raised: #1c211f;
+    --ww-paper-sunken: #101312;
+
+    --ww-ink: #eef0ea;
+    --ww-graphite-1: #d6dad3;
+    --ww-graphite-2: #a3aaa4;
+    --ww-graphite-3: #757d77;
+    --ww-graphite-4: #4b534e;
+    --ww-graphite-5: #2c3330;
+
+    --ww-pencil: #e3e6df;
+    --ww-pencil-soft: rgb(227 230 223 / 0.42);
+    --ww-pencil-faint: rgb(227 230 223 / 0.16);
+
+    --ww-grid-minor: rgb(210 232 222 / 0.045);
+    --ww-grid-major: rgb(210 232 222 / 0.085);
+
+    --ww-blue-ink: #7fd3e8;
+    --ww-yellow: #fff04a;
+    --ww-yellow-ink: #fff04a;
+    --ww-yellow-highlight: rgb(255 240 74 / 0.22);
+    --ww-green-ink: #9bd47f;
+    --ww-red-ink: #ff7b6f;
+
+    --ww-button-bg: #eef0ea;
+    --ww-button-fg: #151918;
+    --ww-fill-hover: rgb(238 240 234 / 0.07);
+    --ww-fill-press: rgb(238 240 234 / 0.12);
+    --ww-focus-ring: rgb(127 211 232 / 0.6);
+
+    --ww-material: rgb(28 33 31 / 0.66);
+    --ww-material-thick: rgb(28 33 31 / 0.84);
+    --ww-material-edge: rgb(255 255 255 / 0.08);
+    --ww-scrim: rgb(0 0 0 / 0.5);
+
+    --ww-shadow-card: 0 1px 1px rgb(0 0 0 / 0.3), 0 8px 28px -8px rgb(0 0 0 / 0.5);
+    --ww-shadow-float: 0 1px 2px rgb(0 0 0 / 0.4), 0 24px 56px -12px rgb(0 0 0 / 0.65);
+  }
+}
+
+:root[data-theme="dark"] {
+  --ww-paper: #151918;
+  --ww-paper-raised: #1c211f;
+  --ww-paper-sunken: #101312;
+  --ww-ink: #eef0ea;
+  --ww-graphite-1: #d6dad3;
+  --ww-graphite-2: #a3aaa4;
+  --ww-graphite-3: #757d77;
+  --ww-graphite-4: #4b534e;
+  --ww-graphite-5: #2c3330;
+  --ww-pencil: #e3e6df;
+  --ww-pencil-soft: rgb(227 230 223 / 0.42);
+  --ww-pencil-faint: rgb(227 230 223 / 0.16);
+  --ww-grid-minor: rgb(210 232 222 / 0.045);
+  --ww-grid-major: rgb(210 232 222 / 0.085);
+  --ww-blue-ink: #7fd3e8;
+  --ww-yellow: #fff04a;
+  --ww-yellow-ink: #fff04a;
+  --ww-yellow-highlight: rgb(255 240 74 / 0.22);
+  --ww-green-ink: #9bd47f;
+  --ww-red-ink: #ff7b6f;
+  --ww-button-bg: #eef0ea;
+  --ww-button-fg: #151918;
+  --ww-fill-hover: rgb(238 240 234 / 0.07);
+  --ww-fill-press: rgb(238 240 234 / 0.12);
+  --ww-focus-ring: rgb(127 211 232 / 0.6);
+  --ww-material: rgb(28 33 31 / 0.66);
+  --ww-material-thick: rgb(28 33 31 / 0.84);
+  --ww-material-edge: rgb(255 255 255 / 0.08);
+  --ww-scrim: rgb(0 0 0 / 0.5);
+  --ww-shadow-card: 0 1px 1px rgb(0 0 0 / 0.3), 0 8px 28px -8px rgb(0 0 0 / 0.5);
+  --ww-shadow-float: 0 1px 2px rgb(0 0 0 / 0.4), 0 24px 56px -12px rgb(0 0 0 / 0.65);
+}
+
+/* Increased contrast: solid surfaces, darker secondary text, stronger grid and strokes. */
+@media (prefers-contrast: more) {
+  :root {
+    --ww-graphite-2: #44474d;
+    --ww-graphite-3: #5d6067;
+    --ww-graphite-4: #8a8d93;
+    --ww-pencil-soft: rgb(52 54 59 / 0.75);
+    --ww-pencil-faint: rgb(52 54 59 / 0.45);
+    --ww-grid-minor: rgb(60 90 125 / 0.1);
+    --ww-grid-major: rgb(60 90 125 / 0.18);
+    --ww-material: var(--ww-paper-raised);
+    --ww-material-thick: var(--ww-paper-raised);
+    --ww-material-edge: var(--ww-graphite-2);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ww-graphite-2: #c8cdc8;
+      --ww-graphite-3: #a7aea8;
+      --ww-graphite-4: #7d857f;
+      --ww-pencil-soft: rgb(227 230 223 / 0.75);
+      --ww-pencil-faint: rgb(227 230 223 / 0.4);
+      --ww-material-edge: var(--ww-graphite-2);
+    }
+  }
+}
+
+/* Reduced transparency: materials become solid paper. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --ww-material: var(--ww-paper-raised);
+    --ww-material-thick: var(--ww-paper-raised);
+    --ww-material-dark: rgb(18 18 20 / 0.94);
+    --ww-material-blur: none;
+  }
+}

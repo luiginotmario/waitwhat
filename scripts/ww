@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# One entry point for every waitwhat tool, run inside the plugin toolchain.
+#
+#   ww setup                         install/repair the toolchain (idempotent)
+#   ww new "prompt" [--attach f]     create ./waitwhat-videos/<slug>/ job dir
+#   ww progress stage voice "..."    write .waitwhat/progress.json
+#   ww tts [--scene id] [--force]    narrate scenes → workspace/audio/
+#   ww render <id...> | --all        render scenes → workspace/renders/ + review frames
+#   ww stitch                        → out/video.mp4, out/thumbnail.jpg, out/manifest.json
+#   ww fetch <url>                   Jina Reader → workspace/research/*.md
+#   ww music bed --mood calm ...     procedural music / sfx
+#   ww refine <job> "text" --at 42   new version dir for a local refine
+#   ww check [job]                   validate out/ against the job contract
+#   ww manim ...                     raw manim inside the toolchain
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cmd="${1:-help}"; shift || true
+py() { "$ROOT/scripts/run.sh" python "$@"; }
+case "$cmd" in
+  setup)    exec "$ROOT/scripts/setup.sh" "$@" ;;
+  new)      exec python3 "$ROOT/scripts/job.py" new "$@" ;;
+  refine)   exec python3 "$ROOT/scripts/job.py" refine "$@" ;;
+  check)    exec python3 "$ROOT/scripts/job.py" check "$@" ;;
+  progress) exec python3 "$ROOT/scripts/progress.py" "$@" ;;
+  tts)      exec python3 "$ROOT/scripts/tts.py" "$@" ;;
+  fetch)    exec python3 "$ROOT/scripts/fetch.py" "$@" ;;
+  render)   py "$ROOT/scripts/render.py" "$@" ;;
+  stitch)   py "$ROOT/scripts/stitch.py" "$@" ;;
+  music)    py "$ROOT/scripts/music.py" "$@" ;;
+  manim)    "$ROOT/scripts/run.sh" manim "$@" ;;
+  help|-h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) echo "ww: unknown command '$cmd' (try: ww help)" >&2; exit 2 ;;
+esac
