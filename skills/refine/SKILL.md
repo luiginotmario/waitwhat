@@ -39,6 +39,13 @@ circle and the narration at that moment decide.
 Pick the smallest change that would satisfy that viewer, but don't be timid: if a new scene is
 what's needed, add it. Usually one or two scenes change.
 
+A refine stays focused on what this viewer asked, with no length cap of its own: if they ask for
+more ("now explain positional encoding", or something a free preview listed in
+`plan.deferred`), add the scenes that takes, as a short chapter where it fits best. Don't use a
+refine to re-plan or pad the rest of the video. Keep `workspace/plan.json` `outline` in sync:
+add an outline item for new material, set `covers` on new scenes, and raise `duration_target`
+if the video grows (the worker sizes its time limit from it).
+
 ## 3. Edit the plan, then the pieces
 - Edit `workspace/plan.json`: insert or modify scenes. Keep existing ids; give new scenes new ids
   (`squares-why`), and keep the palette (new concepts get new colours, old ones keep theirs).

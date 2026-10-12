@@ -34,7 +34,7 @@ checklist and take it as seriously.
 4. Are the core ideas given diagrams?
 5. Are abstractions preceded by concrete examples (one layer of abstraction below the target)?
 6. Does it start with a problem before the instruction? (Problem-first learners understand and
-   transfer better; in video, ask and genuinely pause.)
+   transfer better; in video, pose it with concrete stakes and give it one real beat.)
 7. Is there a reason to care, early?
 
 Useful techniques: *discovery fiction* (a plausible path of flawed attempts and fixes that leads
@@ -57,7 +57,8 @@ explains where it came from.
 
 - **Short and segmented wins.** In a large edX study (Guo, Kim & Rubin, 2014) median engagement
   fell sharply after about 6 minutes, and enthusiastic, faster-paced speakers held attention
-  better. Our 1–5 minute default fits this.
+  better. We don't impose a length (the request decides), but this is why long videos must be
+  segmented into chapters with clear signposts, and why every minute has to earn its place.
 - **Mayer's multimedia principles** (decades of experiments):
   - *Coherence*: cut interesting-but-irrelevant extras. Decoration costs attention.
   - *Signalling*: highlight what matters (colour, a circle, dimming the rest).

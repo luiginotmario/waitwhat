@@ -18,7 +18,7 @@ non-commercial licences, were read for ideas only: no code or text from them is 
 
 | Project | Licence | Use |
 | --- | --- | --- |
-| [elevenlabs/elevenlabs-mcp](https://github.com/elevenlabs/elevenlabs-mcp) | MIT, © 2025 Eleven Labs Inc. | MCP server run via `uvx` (`.mcp.json`) for voice search and auditions. `scripts/tts.py` calls the public ElevenLabs REST API (`/v1/text-to-speech/{voice_id}/with-timestamps`) directly because the MCP returns no word timings. |
+| [ElevenLabs](https://elevenlabs.io) models via [OpenRouter](https://openrouter.ai) | web service | Narration: `scripts/tts.py` calls OpenRouter's `POST /api/v1/audio/speech` (ElevenLabs text-to-speech models) and `POST /api/v1/audio/transcriptions` (ElevenLabs Scribe, word timestamps for forced alignment), and reads per-call cost from `GET /api/v1/generation`. The direct ElevenLabs REST API (`/v1/text-to-speech/{voice_id}/with-timestamps`) is an optional fallback. No ElevenLabs code is included. |
 | [Manim Community Edition](https://github.com/ManimCommunity/manim) | MIT | Animation engine (installed by `scripts/setup.sh`) |
 | [TinyTeX](https://github.com/rstudio/tinytex-releases) / TeX Live | GPL-2 (installer) and the various TeX Live package licences | LaTeX for `MathTex`, downloaded into the user's home by `setup.sh`; not redistributed |
 | [cm-unicode](https://ctan.org/pkg/cm-unicode) (CMU Serif) | SIL Open Font License | Text face, installed through TinyTeX and registered at render time; not redistributed |

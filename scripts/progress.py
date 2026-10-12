@@ -2,13 +2,13 @@
 """Write <job>/.waitwhat/progress.json (the worker polls it; the Mac app shows it).
 
 Shape (CONTRACT.md):
-  {stage, message, scenes:[{index, title, status}]}
+  {stage, message, scenes:[{index, title, status}], outline?:[{index, title, status}]}
   stage  ∈ understanding | research | script | voice | animating | stitching | done
   status ∈ pending | rendering | done | failed
 
 Usage (run from the job dir, or pass --job DIR):
   progress.py stage understanding "Reading the request"
-  progress.py plan                      # (re)load scene list from workspace/plan.json
+  progress.py plan                      # (re)load scene list (+ outline coverage) from workspace/plan.json
   progress.py scene 3 rendering         # by 1-based index ...
   progress.py scene squares done        # ... or by scene id
   progress.py show
@@ -52,6 +52,36 @@ def save(job: Path, data: dict) -> None:
     os.replace(tmp, p)  # atomic: the poller never sees half a file
 
 
+def refresh_outline(data: dict) -> None:
+    """Outline item status from the scenes that cover it: done when all are done."""
+    outline = data.get("outline")
+    if not outline:
+        return
+    for item in outline:
+        mine = [sc for sc in data.get("scenes", []) if item["index"] in (sc.get("covers") or [])]
+        sts = [sc.get("status") for sc in mine]
+        if mine and all(st == "done" for st in sts):
+            item["status"] = "done"
+        elif any(st in ("rendering", "done") for st in sts):
+            item["status"] = "rendering"
+        elif any(st == "failed" for st in sts):
+            item["status"] = "failed"
+        else:
+            item["status"] = "pending"
+
+
+def covers_of(scene: dict, n_outline: int) -> list[int]:
+    out = []
+    for c in scene.get("covers") or []:
+        try:
+            i = int(c)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= i <= n_outline and i not in out:
+            out.append(i)
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--job", default=".", help="job dir (default: cwd)")
@@ -86,6 +116,23 @@ def main() -> None:
             if status not in STATUSES:
                 status = "pending"
             scenes.append({"index": i, "id": s.get("id"), "title": s.get("title", f"Scene {i}"), "status": status})
+        outline = plan.get("outline") or []
+        if outline:
+            for sc_, s in zip(scenes, plan.get("scenes", [])):
+                sc_["covers"] = covers_of(s, len(outline))
+            data["outline"] = [{"index": i, "title": str(o.get("title", f"Part {i}"))}
+                               for i, o in enumerate(outline, start=1)]
+            dropped = {str(d.get("title", "")).strip().lower() for d in plan.get("dropped") or [] if isinstance(d, dict)}
+            for o in data["outline"]:
+                if o["title"].strip().lower() in dropped:
+                    o["dropped"] = True
+            covered = {c for sc_ in scenes for c in sc_["covers"]}
+            gaps = [o["title"] for o in data["outline"] if o["index"] not in covered and not o.get("dropped")]
+            if gaps and scenes:
+                print("progress: WARNING outline items no scene covers (add scenes, set `covers`, "
+                      "or record them in plan.dropped with a reason): " + "; ".join(gaps), file=sys.stderr)
+        else:
+            data.pop("outline", None)
         data["scenes"] = scenes
     elif a.cmd == "scene":
         hit = None
@@ -98,8 +145,10 @@ def main() -> None:
         if a.message:
             data["message"] = a.message
     elif a.cmd == "show":
+        refresh_outline(data)
         print(json.dumps(data, indent=1))
         return
+    refresh_outline(data)
     save(job, data)
 
 

@@ -26,11 +26,13 @@ Then either load it for one session, `claude --plugin-dir ~/waitwhat`, or instal
 ```
 
 Needs macOS or Linux, `ffmpeg`, and `uv` (setup installs uv if missing; on macOS it also
-`brew install`s cairo and pkg-config). Optional environment variables:
+`brew install`s cairo and pkg-config). Environment variables:
 
 | Variable | What for |
 | --- | --- |
-| `ELEVENLABS_API_KEY` | natural narration with word timings (without it, macOS `say` is used) |
+| `OPENROUTER_API_KEY` | the one key you need: natural narration (ElevenLabs voices via OpenRouter) with word timings. Without it, macOS `say` is used |
+| `ELEVENLABS_API_KEY` | optional: direct ElevenLabs, used only when `OPENROUTER_API_KEY` is not set (or for cloned voices) |
+| `WAITWHAT_TTS_PROVIDER` | optional: force a narrator, `openrouter`, `elevenlabs` or `say` (or an order like `elevenlabs,say`) |
 | `JINA_API_KEY` | higher rate limits when reading web pages and documents |
 
 ## Use

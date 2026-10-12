@@ -17,7 +17,9 @@ under the stings; then loudnorm. Run it with the plugin venv (numpy), e.g. via s
 from __future__ import annotations
 
 import argparse
+import concurrent.futures as cf
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -68,10 +70,15 @@ def read_wav(p: Path) -> np.ndarray:
 
 
 def write_wav(p: Path, x: np.ndarray) -> None:
-    x = np.clip(x, -1, 1)
+    """Writes stereo s16 in chunks, so an hour-long track never needs extra full-size copies."""
+    step = SR * 30
     with wave.open(str(p), "wb") as w:
         w.setnchannels(2); w.setsampwidth(2); w.setframerate(SR)
-        w.writeframes((x * 32767).astype("<i2").tobytes())
+        for i in range(0, len(x), step):
+            c = np.clip(x[i:i + step], -1, 1)
+            if c.shape[1] == 1:
+                c = np.repeat(c, 2, axis=1)
+            w.writeframes((c * 32767).astype("<i2").tobytes())
 
 
 def place(track: np.ndarray, clip: np.ndarray, at: float, gain_db: float = 0.0) -> None:
@@ -79,6 +86,8 @@ def place(track: np.ndarray, clip: np.ndarray, at: float, gain_db: float = 0.0) 
     if i >= len(track):
         return
     n = min(len(clip), len(track) - i)
+    if track.shape[1] == 1 and clip.shape[1] != 1:
+        clip = clip[:n].mean(axis=1, keepdims=True)
     track[i:i + n] += clip[:n] * (10 ** (gain_db / 20))
 
 
@@ -148,9 +157,8 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         # -------------------------------------------------------------- video
-        lst = []
-        for k, s in enumerate(segs):
-            seg = tmp / f"seg{k:03d}.mp4"
+        def encode(k: int, s: dict) -> str:
+            seg = tmp / f"seg{k:04d}.mp4"
             vf = (f"fps={FPS},scale={W}:{H}:force_original_aspect_ratio=decrease:flags=lanczos,"
                   f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:black,format=yuv420p")
             if s["pad"] > 0.01:
@@ -158,7 +166,12 @@ def main() -> None:
             run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(s["video"]), "-vf", vf, "-t", f"{s['duration']:.3f}",
                  "-an", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-r", str(FPS),
                  "-video_track_timescale", "15360", str(seg)])
-            lst.append(f"file '{seg}'")
+            return f"file '{seg}'"
+
+        # Segments are independent: encode a few at once (long videos have dozens).
+        workers = max(1, min(4, (os.cpu_count() or 2) // 2))
+        with cf.ThreadPoolExecutor(max_workers=workers) as pool:
+            lst = list(pool.map(lambda ks: encode(*ks), enumerate(segs)))
         (tmp / "list.txt").write_text("\n".join(lst))
         video = tmp / "video.mp4"
         run(["ffmpeg", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(tmp / "list.txt"),
@@ -167,8 +180,9 @@ def main() -> None:
 
         # -------------------------------------------------------------- narration + sfx tracks
         n = int((vtotal + 0.5) * SR)
-        narr = np.zeros((n, 2), np.float32)
-        fx = np.zeros((n, 2), np.float32)
+        # Mono in memory (narration is mono, the sfx are centred); written out as stereo.
+        narr = np.zeros((n, 1), np.float32)
+        fx = np.zeros((n, 1), np.float32)
         for s in segs:
             if s.get("audio") and s["audio"].exists():
                 place(narr, read_wav(s["audio"]), s["start"] + s["lead_in"])

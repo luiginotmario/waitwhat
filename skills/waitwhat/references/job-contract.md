@@ -5,7 +5,7 @@ they create a job dir and run the agent with that dir as cwd.
 
 ```
 <job>/
-  request.json              {prompt, attachments:[{path,name,mime}], refine?:{text, at_seconds, frame_path}}
+  request.json              {prompt, attachments:[{path,name,mime}], plan?, answers?, refine?:{text, at_seconds, frame_path}}
   inputs/                   downloaded attachments (+ the refine frame png)
   workspace/                previous version's workspace when refining; otherwise empty
   .waitwhat/progress.json   written ONLY via `ww progress …`; the worker polls it
@@ -15,14 +15,25 @@ they create a job dir and run the agent with that dir as cwd.
 ```
 
 - Paths inside `request.json` are relative to the job dir.
+- `request.plan` (optional) is the coverage plan made before the job by
+  `references/planning.md`: `{title, est_minutes, outline:[{title, summary}], audience?,
+  question?, asked?:[string], note?, deferred?:[string]}`. `request.answers` (optional) holds the
+  person's answers to clarifying questions: `[{id, q, a}]` (`a` null when skipped). The outline is
+  the checklist the video must cover; see the `waitwhat` skill.
 - After success the worker tars `workspace/` (it becomes the starting point of the next refine)
   and uploads `out/*`. Keep `workspace/` self-contained and reasonably small: no Manim media
   caches (render.py deletes them), no copies of `out/`.
-- `progress.json` shape: `{stage, message, scenes:[{index,title,status}]}` with stage in
-  understanding → research → script → voice → animating → stitching → done and scene status in
-  pending | rendering | done | failed. Scene `index` is 1-based and matches the manifest.
-- `.waitwhat/usage.json` (extra, optional) accumulates billable usage, e.g.
-  `{"elevenlabs_characters": 954}`, for the worker's cost accounting.
+- `progress.json` shape: `{stage, message, scenes:[{index,title,status}], outline?:[{index,title,status}]}`
+  with stage in understanding → research → script → voice → animating → stitching → done and
+  scene status in pending | rendering | done | failed. Scene `index` is 1-based and matches the
+  manifest. `outline` (written by `ww progress plan` when plan.json has one) is progress against
+  the coverage plan: an item is done when every scene that `covers` it is done.
+- `.waitwhat/usage.json` (extra, optional) accumulates billable narration usage across `ww tts`
+  runs, for the worker's cost accounting: `{"openrouter_audio_cost_usd": 0.0124,
+  "tts_characters": 296, "stt_seconds": 16.7, "tts_model": "elevenlabs/eleven-multilingual-v2",
+  "voice": "george", "elevenlabs_characters": 296}`. `openrouter_audio_cost_usd` is the measured
+  OpenRouter cost (speech + transcription) in USD; `tts_characters` counts every character sent
+  for synthesis, through any provider; `elevenlabs_characters` is a legacy alias of it.
 - `manifest.json` is written by `ww stitch` from plan.json. `narration` is the plain spoken
   text (markup stripped); `start`/`duration` are seconds in the final video (after the intro).
 
@@ -58,9 +69,16 @@ workspace/
   "question": "Why should the squares on the two short sides add up to the square on the long side?",
   "audience": "curious adult, no algebra needed beyond squaring",
   "aha": "The same four triangles leave behind either a² + b² or c², so they must be equal.",
-  "duration_target": 150,
-  "voice": {"backend": "auto", "voice_id": "…", "voice_name": "…", "model_id": "eleven_multilingual_v2",
-            "stability": 0.45, "similarity_boost": 0.8, "style": 0.15, "speed": 1.0,
+  "duration_target": 150,                // seconds: request.plan.est_minutes × 60
+  "asked": ["why a² + b² = c²"],          // what the person explicitly asked for (from request.plan)
+  "outline": [                           // the coverage checklist (from request.plan; refine, never silently drop)
+    {"title": "The claim", "summary": "The squares on the short sides always add up to the big one."},
+    {"title": "Four triangles, two ways", "summary": "Rearranging the same triangles proves it."}
+  ],
+  "deferred": [],                        // free preview only: what was left for later
+  "dropped": [],                         // outline items you could not cover: [{"title", "why"}]
+  "voice": {"backend": "auto", "voice_id": "…", "voice_name": "…", "model_id": "elevenlabs/eleven-multilingual-v2",
+            "stability": 0.45, "similarity_boost": 0.8, "style": 0.15, "speed": 1.12,
             "say_voice": "Daniel", "say_rate": 182},
   "pronunciations": {"Euler": "Oiler"},
   "palette": {"a": "BLUE", "b": "TEAL", "c": "YELLOW_SOFT", "triangle": "GREY"},
@@ -73,6 +91,7 @@ workspace/
       "goal": "Make the viewer want to know why a² + b² = c² could possibly be true.",
       "narration": "Take any right triangle … <bookmark mark=\"squares\"/> build a square on each side …",
       "visual": "Right triangle fades up; three squares grow off its sides in their concept colours …",
+      "covers": [1],                     // 1-based outline items this scene serves (every item needs at least one scene)
       "transition": "cut",               // how THIS scene is entered: continuous (starts on the previous scene's last frame, no whoosh) | cut
       "lead_in": 0.35                    // optional seconds before narration starts
     }
