@@ -2,7 +2,7 @@
 # One entry point for every waitwhat tool, run inside the plugin toolchain.
 #
 #   ww setup                         install/repair the toolchain (idempotent)
-#   ww new "prompt" [--attach f]     create ./waitwhat-videos/<slug>/ job dir
+#   ww new "prompt" [--attach f] [--aspect 9:16]  create ./waitwhat-videos/<slug>/ job dir
 #   ww progress stage voice "..."    write .waitwhat/progress.json
 #   ww tts [--scene id] [--force]    narrate scenes (in parallel) → workspace/audio/
 #   ww tts --background | --wait     voice in a detached process / wait for it
@@ -43,6 +43,6 @@ case "$cmd" in
   sfx)      py "$ROOT/scripts/sfx_library.py" "$@" ;;
   backdrop) exec python3 "$ROOT/scripts/backdrop.py" "$@" ;;
   manim)    "$ROOT/scripts/run.sh" manim "$@" ;;
-  help|-h|--help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//' ;;
+  help|-h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) echo "ww: unknown command '$cmd' (try: ww help)" >&2; exit 2 ;;
 esac

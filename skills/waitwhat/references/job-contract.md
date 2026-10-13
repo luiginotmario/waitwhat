@@ -5,13 +5,13 @@ they create a job dir and run the agent with that dir as cwd.
 
 ```
 <job>/
-  request.json              {prompt, attachments:[{path,name,mime}], plan?, answers?, research?, level?, refine?:{text, at_seconds, frame_path}}
+  request.json              {prompt, attachments:[{path,name,mime}], plan?, answers?, research?, level?, aspect?, refine?:{text, at_seconds, frame_path}}
   inputs/                   downloaded attachments (+ the refine frame png)
   workspace/                previous version's workspace when refining; otherwise empty
   .waitwhat/progress.json   written ONLY via `ww progress …`; the worker polls it
-  out/video.mp4             REQUIRED  1920x1080, h264 + aac
+  out/video.mp4             REQUIRED  1920x1080 (aspect 9:16: 1080x1920), h264 + aac
   out/thumbnail.jpg         REQUIRED
-  out/manifest.json         REQUIRED  {title, scenes:[{index,title,narration,start,duration}]}
+  out/manifest.json         REQUIRED  {title, aspect, width, height, scenes:[{index,title,narration,start,duration}]}
 ```
 
 - Paths inside `request.json` are relative to the job dir.
@@ -22,6 +22,11 @@ they create a job dir and run the agent with that dir as cwd.
   the checklist the video must cover; see the `waitwhat` skill.
 - `request.level` (optional): the depth the person picked, `eli10 | auto | expert | jargon`;
   anything but `auto` overrides the audience inferred from the wording (planning.md §2).
+- `request.aspect` (optional): the video format the person picked, `"16:9"` (default) or `"9:16"`
+  (vertical, 1080x1920). Copy it into `plan.json` as `"aspect"` when you write the plan (a refine
+  keeps the workspace's). Scenes are laid out for it from the start (manim-scenes style guide,
+  "Vertical 9:16"), never cropped; `ww render`, the stings, `ww stitch` and the thumbnail
+  (720x1280) follow it.
 - `request.research` (optional): pages the web planner already fetched for this request (the URLs
   in the prompt), saved before the run as `workspace/research/<slug>.md` with the usual source
   header: `[{url, path, chars}]` (`path` relative to the job dir). Use them; don't fetch them again
@@ -90,6 +95,7 @@ workspace/
             "stability": 0.45, "similarity_boost": 0.8, "style": 0.15, "speed": 1.12,
             "say_voice": "Daniel", "say_rate": 182},
   "pronunciations": {"Euler": "Oiler"},
+  "aspect": "16:9",                      // from request.aspect: "16:9" | "9:16" (vertical); default 16:9
   "theme": "classic",                    // the video's world (style guide): classic | studio | chalkboard | blueprint | space | ocean | city | whiteboard | graph_paper | paper | hills; or {"name", "ambient": false}
   "palette": {"a": "BLUE", "b": "TEAL", "c": "YELLOW_SOFT", "triangle": "GREY"},  // colour NAMES, so they follow the theme
   "sound": {"music": "calm", "music_db": -17, "sfx": true, "sfx_auto": true, "sfx_db": 0, "intro": true, "outro": true},

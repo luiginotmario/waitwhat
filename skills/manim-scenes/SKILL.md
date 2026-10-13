@@ -36,6 +36,10 @@ class Squares(WaitwhatScene):
 - Few words on screen: labels, a formula, a key number. The narration carries sentences.
 - Big and calm: one focal object filling 50–70 % of the frame, generous margins, nothing within
   0.5 units of the edge, text never below `SIZE_SMALL`.
+- Two aspects, one render each: 16:9 (default) or vertical 9:16 (`plan.aspect`; `ww render`
+  prints `"aspect": "9:16"`). Lay scenes out with the adaptive helpers (`place_title`,
+  `side_by_side`, `flow`, `spots`, `fit_safe`, `by_aspect`, `MAIN`) instead of hard-coded
+  x positions, and in 9:16 follow the vertical rules (below).
 - Motion explains: things grow from where they come from, transform into what they become, and
   dim (`dim(...)`) rather than vanish when they become context. Entrances ease out (`enter`),
   exits are quicker (`leave`). Typical run_time 1–3 s; the big reveal gets more, plus silence.
@@ -47,6 +51,17 @@ class Squares(WaitwhatScene):
 - Sound comes from the animations: appear, write, draw and erase get quiet cues automatically;
   add meaning with `self.play(..., sfx="coin")` or `self.sfx("chime", at="reveal")`. Details in
   the style guide ("Sound cues").
+
+## Vertical 9:16 in one breath
+
+When `plan.aspect` is `"9:16"` (`IS_VERTICAL`), the frame is 8 × 14.22 units and is watched on a
+phone: **stack, don't spread** (side by side becomes one above the other, sequences run top to
+bottom); **larger type** (the lib scales it by 1.3; keep labels to 1–3 words); **one central
+focus** at `SAFE_CENTER`; **thumb-safe margins** (|x| ≤ 3.45, nothing in the top 0.9 units); and
+**nothing to read in the bottom ~15 %** (below `SAFE_BOTTOM`), where the platform's captions and
+buttons sit. Details and the helper table: `references/style-guide.md`, "Layout" and
+"Vertical 9:16". The templates `comparison.py`, `flow_causal.py` and `timeline.py` adapt to both
+aspects; adapt the others with the same helpers.
 
 ## Timing comes from the voice
 
@@ -103,4 +118,7 @@ back in a line or two.
 | `comparison.py` | A vs B, before/after, numbers that grow into bars |
 | `company.py` | company explainers: problem → product → example → money → users |
 
-Read only the template you need. Adapt freely; they show the style, not the only way.
+Read only the template you need. Adapt freely; they show the style, not the only way. The
+comparison, flow and timeline templates are written once for both aspects (`by_aspect`, `MAIN`,
+`SAFE_CENTER`); the others are laid out for 16:9, so re-place their objects with the layout
+helpers in a 9:16 video.

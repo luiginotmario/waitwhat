@@ -3,6 +3,8 @@
 Narration bookmarks used: "a", "b", "c", "loop".
 Pattern: the diagram grows one link per narrated step; a moving dot shows causation;
 the closing arrow is the aha (feedback). Works for pipelines and systems too.
+Both aspects: the loop is a wide diamond in 16:9 and a tall one in 9:16 (narrower boxes).
+For a straight pipeline use flow(*nodes): left to right in 16:9, top to bottom in 9:16.
 """
 from waitwhat_style import *
 
@@ -12,8 +14,9 @@ STEPS = ["Warmer air", "More evaporation", "More water vapour", "More heat trapp
 class FeedbackLoop(WaitwhatScene):
     def construct(self):
         cols = [color_of("heat", RED), color_of("water", BLUE), color_of("vapour", TEAL), color_of("heat", RED)]
-        pos = [UP * 2.2, RIGHT * 3.6, DOWN * 2.2, LEFT * 3.6]
-        nodes = [node(s, color=c, width=3.6).move_to(p) for s, c, p in zip(STEPS, cols, pos)]
+        rx, ry = by_aspect((3.6, 2.2), (1.95, 3.7))                  # the diamond's half-width/height
+        pos = [SAFE_CENTER + v for v in (UP * ry, RIGHT * rx, DOWN * ry, LEFT * rx)]
+        nodes = [node(s, color=c, width=by_aspect(3.6, 3.0)).move_to(p) for s, c, p in zip(STEPS, cols, pos)]
         arrows = [link(nodes[i], nodes[(i + 1) % 4], curved=-PI / 3, color=INK_2) for i in range(4)]
 
         self.play(enter(nodes[0]))
@@ -32,6 +35,6 @@ class FeedbackLoop(WaitwhatScene):
         self.play(Create(arrows[3]), run_time=0.9)
         self.play(LaggedStart(*[a.animate.set_color(YELLOW) for a in arrows], lag_ratio=0.25),
                   rate_func=there_and_back, run_time=2.0)
-        label = hand("feedback!", size=40).move_to(ORIGIN)
+        label = hand("feedback!", size=40).move_to(SAFE_CENTER + UP * by_aspect(0, 1.9))  # 9:16: clear of the side boxes
         self.play(FadeIn(label, scale=0.9, rate_func=ease_out))
         self.finish()

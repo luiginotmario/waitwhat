@@ -299,12 +299,25 @@ def _stamp(img: np.ndarray, x: float, y: float, spr: np.ndarray, color, strength
     region[:] = region * (1 - a) + np.asarray(color, np.float32) * a
 
 
+def content_floor(name: str, frame_h: float = 8.0) -> float:
+    """Lowest y content may use on this theme, in frame units (scenery such as a skyline or hills
+    sits below it). Themes declare it for the 8-unit-tall 16:9 frame; a taller frame (9:16, 14.22
+    units) keeps the scenery band in proportion to the frame's height."""
+    f = THEMES[canonical(name)].get("floor")
+    if f is None:
+        return -frame_h / 2 + 0.5
+    if abs(frame_h - 8.0) < 1e-6:
+        return float(f)
+    return -frame_h / 2 + (4.0 + float(f)) * (frame_h / 8.0) * 0.79
+
+
 # --------------------------------------------------------------------------- per-theme painters
 
 def _paint(name: str, h: int, w: int, u: float, rng) -> tuple[np.ndarray, dict]:
     """→ (RGB float image, ambient state)."""
     t = THEMES[name]
     cx, cy = w / 2, h / 2
+    px = min(w, h) / 1080          # sprite scale: the short side, so 9:16 stars are not bigger
     amb: dict = {}
     if name == "classic":
         img = np.zeros((h, w, 3), np.float32) + rgb(t["bg"])
@@ -337,12 +350,12 @@ def _paint(name: str, h: int, w: int, u: float, rng) -> tuple[np.ndarray, dict]:
         _blend(img, rgb("#1E6A86"), np.clip(neb2 - 0.58, 0, 1) ** 1.3 * 0.45)
         n = int(w * h / 2600)
         for _ in range(n):                                                          # static stars
-            r = float(rng.choice([0.7, 0.9, 1.2, 1.7], p=[0.5, 0.3, 0.15, 0.05])) * h / 1080
+            r = float(rng.choice([0.7, 0.9, 1.2, 1.7], p=[0.5, 0.3, 0.15, 0.05])) * px
             _stamp(img, rng.random() * w, rng.random() * h, _sprite(r), rgb("#F4F6FF"),
                    float(rng.uniform(0.3, 0.9)))
         stars = []
         for _ in range(int(70 * w / 1920) + 10):                                    # twinkling ones
-            r = float(rng.uniform(1.3, 2.2)) * h / 1080
+            r = float(rng.uniform(1.3, 2.2)) * px
             stars.append((rng.random() * w, rng.random() * h, _sprite(r), float(rng.uniform(0.3, 1.2)),
                           float(rng.uniform(0, 6.28)), float(rng.uniform(0.35, 0.9))))
         amb = {"stars": stars}
@@ -357,17 +370,17 @@ def _paint(name: str, h: int, w: int, u: float, rng) -> tuple[np.ndarray, dict]:
         img += (_noise(h, w, 120 * u / 100, rng, 3)[..., None] - 0.5) * 10
         parts = []
         for _ in range(int(60 * w / 1920) + 8):
-            r = float(rng.uniform(0.6, 1.5)) * h / 1080
-            parts.append([rng.random() * w, rng.random() * h, _sprite(r), float(rng.uniform(4, 14)) * h / 1080,
+            r = float(rng.uniform(0.6, 1.5)) * px
+            parts.append([rng.random() * w, rng.random() * h, _sprite(r), float(rng.uniform(4, 14)) * px,
                           float(rng.uniform(0, 6.28)), float(rng.uniform(0.15, 0.45))])
         amb = {"particles": parts}
         _vignette(img, 0.25, "#020A12")
     elif name == "city":
         img = _vertical(h, w, "#0A1029", "#1F2747", curve=1.2)
         for _ in range(int(w * h / 14000)):
-            _stamp(img, rng.random() * w, rng.random() * h * 0.6, _sprite(0.6 * h / 1080), rgb("#E8ECFF"),
+            _stamp(img, rng.random() * w, rng.random() * h * 0.6, _sprite(0.6 * px), rgb("#E8ECFF"),
                    float(rng.uniform(0.15, 0.55)))
-        floor_y = cy - t["floor"] * u                      # px of the content floor
+        floor_y = cy - content_floor(name, h / u) * u                      # px of the content floor
         base = h
         windows = []
         x = -rng.random() * 40
@@ -416,14 +429,14 @@ def _paint(name: str, h: int, w: int, u: float, rng) -> tuple[np.ndarray, dict]:
         _blend(img, rgb("#D9C9A6"), np.clip(fib - 0.5, 0, 1) * 0.35)
         img += (_noise(h, w, 1.6, rng, 1)[..., None] - 0.5) * 7
         for k, y in _unit_lines(h, u, 0.5, cy):
-            _hlines(img, [y], "#7FA3C9", 0.22, width=max(1, int(h / 1080)))
-        _vlines(img, [cx - 6.75 * u], "#D9534F", 0.45, width=max(1, int(2 * h / 1080)))
+            _hlines(img, [y], "#7FA3C9", 0.22, width=max(1, int(px)))
+        _vlines(img, [cx - (w / (2 * u) - 0.36) * u], "#D9534F", 0.45, width=max(1, int(2 * px)))  # margin line, 0.36 in from the left edge
         _vignette(img, 0.18, "#7A5E35")
     elif name == "hills":
         img = _vertical(h, w, "#BFDDF0", "#F3EFDF", curve=1.1)
         xs = np.arange(w, dtype=np.float32)
         ys = np.arange(h, dtype=np.float32)[:, None]
-        floor_y = cy - t["floor"] * u
+        floor_y = cy - content_floor(name, h / u) * u
         for col, lvl, amp, f, ph in (("#B9D7A8", 0.15, 0.35, 1.3, rng.random() * 6),
                                      ("#93C285", 0.45, 0.30, 2.1, rng.random() * 6),
                                      ("#6FA76A", 0.75, 0.22, 3.0, rng.random() * 6)):
@@ -528,7 +541,7 @@ class Ambient:
             for p in self.state["particles"]:
                 x0, y0, spr, speed, ph, amp = p
                 y = (y0 - t * speed) % (h + 20) - 10
-                x = x0 + math.sin(t * 0.35 + ph) * 6 * h / 1080
+                x = x0 + math.sin(t * 0.35 + ph) * 6 * min(w, h) / 1080
                 self._stamp(rgbv, x, y, spr, (200, 236, 245), amp)
         elif self.kind == "windows":
             wins, lit = self.state["windows"], self.state["lit"]
@@ -544,7 +557,7 @@ class Ambient:
         elif self.kind == "clouds":
             m = self.state["clouds"]
             sh, sw = m.shape
-            off = int(t * 9 * h / 1080) % (sw - w) if sw > w else 0
+            off = int(t * 9 * min(w, h) / 1080) % (sw - w) if sw > w else 0
             a = m[:, off:off + w][..., None]
             region = rgbv[:sh].astype(np.float32)
             region = region * (1 - a) + self.state["cloud_color"] * a
@@ -563,7 +576,7 @@ class Ambient:
         img[ya:yb, xa:xb] = np.clip(region * (1 - a) + np.asarray(color, np.float32) * a, 0, 255).astype(np.uint8)
 
 
-if __name__ == "__main__":  # contrast report + preview PNGs:  python waitwhat_themes.py [outdir]
+if __name__ == "__main__":  # contrast report + preview PNGs (16:9 and 9:16):  python waitwhat_themes.py [outdir]
     import sys
     problems = [p for n in THEMES for p in check_contrast(n)]
     print("\n".join(problems) if problems else f"contrast ok for {len(THEMES)} themes")
@@ -572,11 +585,12 @@ if __name__ == "__main__":  # contrast report + preview PNGs:  python waitwhat_t
         d = Path(sys.argv[1])
         d.mkdir(parents=True, exist_ok=True)
         for n in THEMES:
-            img, amb = background(n, 960, 540, 14.222)
-            if amb:
-                buf = img.copy()
-                Ambient(n, img, amb, 15).paint(buf, 3.0)
-                img = buf
-            Image.fromarray(img[..., :3]).save(d / f"{n}.png")
+            for suffix, (pw, ph, fw) in (("", (960, 540, 14.222)), ("_9x16", (540, 960, 8.0))):
+                img, amb = background(n, pw, ph, fw)
+                if amb:
+                    buf = img.copy()
+                    Ambient(n, img, amb, 15).paint(buf, 3.0)
+                    img = buf
+                Image.fromarray(img[..., :3]).save(d / f"{n}{suffix}.png")
         print(d)
     sys.exit(1 if problems else 0)

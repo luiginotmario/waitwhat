@@ -5,9 +5,9 @@
   stitch.py --job DIR --no-intro --music curious
 
 Reads workspace/plan.json, renders/<id>.mp4, audio/<id>.{wav,json}; writes
-  out/video.mp4        1920x1080 30 fps, h264 + aac, loudness-normalised (-16 LUFS, -1.5 dBTP)
-  out/thumbnail.jpg    1280x720 (workspace/thumbnail.png if the agent made one, else a chosen frame)
-  out/manifest.json    {title, scenes:[{index,title,narration,start,duration}]}
+  out/video.mp4        1920x1080 (9:16: 1080x1920) 30 fps, h264 + aac, loudness-normalised (-16 LUFS, -1.5 dBTP)
+  out/thumbnail.jpg    1280x720 (9:16: 720x1280); workspace/thumbnail.png if the agent made one, else a chosen frame
+  out/manifest.json    {title, aspect, width, height, scenes:[{index,title,narration,start,duration}]}
   workspace/timeline.json   segment start/duration per scene id (used by refine and render --probe)
 
 Video: the scene renders are concatenated as they are (stream copy, no re-encode) when they all
@@ -48,7 +48,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 SR = 48000
-W, H, FPS = 1920, 1080, 30
+W, H, FPS = 1920, 1080, 30   # 16:9; main() switches to 1080x1920 for a 9:16 video (scripts/aspect.py)
 TAG = re.compile(r"<\s*(bookmark|break)\b[^>]*/\s*>", re.I)
 
 
@@ -127,8 +127,9 @@ def loudness(p: Path) -> tuple[float | None, float | None]:
 
 
 def final_sheet(video: Path, thumb: Path, out: Path, total: float, n: int = 7) -> None:
-    """frames/_final.jpg: n frames across the finished video plus the thumbnail, 2 columns."""
-    tw, th = 640, 360
+    """frames/_final.jpg: n frames across the finished video plus the thumbnail, 2 columns (9:16: 4)."""
+    tw, th = (640, 360) if W >= H else (270, 480)
+    cols = 2 if W >= H else 4
     ins: list[str] = []
     for k in range(n):
         ins += ["-ss", f"{total * (k + 0.5) / n:.2f}", "-i", str(video)]
@@ -136,7 +137,7 @@ def final_sheet(video: Path, thumb: Path, out: Path, total: float, n: int = 7) -
     m = n + 1
     fc = "".join(f"[{i}:v]trim=end_frame=1,scale={tw}:{th}:force_original_aspect_ratio=decrease,"
                  f"pad={tw + 6}:{th + 6}:0:0:0x444444,setsar=1[p{i}];" for i in range(m))
-    layout = "|".join(f"{(i % 2) * (tw + 6)}_{(i // 2) * (th + 6)}" for i in range(m))
+    layout = "|".join(f"{(i % cols) * (tw + 6)}_{(i // cols) * (th + 6)}" for i in range(m))
     fc += "".join(f"[p{i}]" for i in range(m)) + f"xstack=inputs={m}:layout={layout}:fill=0x444444"
     out.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(["ffmpeg", "-loglevel", "error", "-y", *ins, "-filter_complex", fc, "-frames:v", "1", "-q:v", "3",
@@ -354,6 +355,12 @@ def main() -> None:
     ws, out = job / "workspace", job / "out"
     out.mkdir(parents=True, exist_ok=True)
     plan = json.loads((ws / "plan.json").read_text())
+    global W, H
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import aspect as _aspect  # sibling script (stdlib only)
+    asp = _aspect.aspect_of(ws)
+    W, H = _aspect.SIZE[asp]
+    TW, TH = (1280, 720) if W >= H else (720, 1280)  # thumbnail
     snd = {"music": "calm", "music_db": -17.0, "sfx": True, "intro": True, "outro": True, **(plan.get("sound") or {})}
     if a.music:
         snd["music"] = a.music
@@ -507,7 +514,8 @@ def main() -> None:
     custom = ws / "thumbnail.png"
     scenes = [s for s in segs if not s["id"].startswith("_")]
     if custom.exists():
-        run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(custom), "-vf", "scale=1280:720", "-q:v", "2", str(thumb)])
+        run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(custom), "-vf",
+             f"scale={TW}:{TH}:force_original_aspect_ratio=increase,crop={TW}:{TH}", "-q:v", "2", str(thumb)])
     else:
         tp = plan.get("thumbnail") or {}
         pick = next((s for s in scenes if s["id"] == tp.get("scene")), None)
@@ -515,12 +523,12 @@ def main() -> None:
             pick = scenes[min(len(scenes) - 1, max(0, len(scenes) // 2))]
         at = pick["start"] + float(tp.get("t", pick["duration"] * 0.8))
         run(["ffmpeg", "-loglevel", "error", "-y", "-ss", f"{at:.2f}", "-i", str(out / "video.mp4"),
-             "-frames:v", "1", "-vf", "scale=1280:720", "-q:v", "2", str(thumb)])
+             "-frames:v", "1", "-vf", f"scale={TW}:{TH}", "-q:v", "2", str(thumb)])
     sheet = ws / "frames" / "_final.jpg"
     final_sheet(out / "video.mp4", thumb, sheet, duration(out / "video.mp4"))
 
     # ------------------------------------------------------------------ manifest + timeline
-    manifest = {"title": plan.get("title", "waitwhat"),
+    manifest = {"title": plan.get("title", "waitwhat"), "aspect": asp, "width": W, "height": H,
                 "scenes": [{"index": s["index"], "title": s["title"], "narration": s["narration"],
                             "start": s["start"], "duration": s["duration"]} for s in scenes]}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1, ensure_ascii=False))
@@ -532,7 +540,7 @@ def main() -> None:
     shutil.rmtree(ws / ".media", ignore_errors=True)  # render scratch; keeps the archived workspace small
 
     v = ffprobe(out / "video.mp4", "stream=codec_name,width,height")
-    print(json.dumps({"ok": True, "video": str(out / "video.mp4"), "duration": timeline["total"],
+    print(json.dumps({"ok": True, "video": str(out / "video.mp4"), "aspect": asp, "duration": timeline["total"],
                       "streams": v.split(), "video_mode": video_mode, "loudness_in": lufs, "gain_db": round(gain, 2),
                       "thumbnail": str(thumb), "manifest": str(out / "manifest.json"),
                       "final_sheet": str(sheet) if sheet.exists() else None}))

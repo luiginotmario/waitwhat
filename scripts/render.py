@@ -27,6 +27,10 @@ it starts and `done` when it succeeds (--no-progress to skip), so a scene builde
 separate `ww progress scene` call. Final 1080p renders take seconds, so render the final directly
 and look at its sheet; previews are for heavy scenes only.
 
+Aspect: plan.json "aspect" (else <job>/request.json, else WAITWHAT_ASPECT; scripts/aspect.py) picks the
+frame: 16:9 renders 1920x1080, 9:16 renders 1080x1920 (previews 480x854); the style lib sets the
+matching frame size, the stings and review frames follow it.
+
 Narration timing: while `ww tts` is still voicing a scene (workspace/audio/<id>.pending), rendering
 that scene waits for its audio (up to --wait-audio seconds), so scene code can be written in
 parallel with the voice. Without audio the lib estimates timings from the plan's narration (fine
@@ -53,6 +57,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 LIB = ROOT / "skills" / "manim-scenes" / "lib"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import aspect as _aspect  # noqa: E402  (stdlib-only sibling: 16:9 or 9:16, and its pixel sizes)
 VENV_BIN = ROOT / ".venv" / "bin"
 QUALITY = {"h": "-qh", "m": "-qm", "l": "-ql"}
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
@@ -101,6 +107,8 @@ def content_hash(ws: Path, sid: str, quality: str, fps: int) -> str:
     """
     h = hashlib.sha256()
     h.update(f"{quality}{fps}".encode())
+    if _aspect.is_vertical(ws):
+        h.update(b"9:16")  # only vertical changes the key, so existing 16:9 renders stay cached
     code_files = [ws / "scenes" / f"{sid}.py", *sorted((ws / "scenes").glob("shared*.py"))]
     code_text = ""
     for p in [*code_files, *sorted(LIB.glob("*.py")), ws / "audio" / f"{sid}.json"]:
@@ -147,20 +155,29 @@ def frame_times(dur: float, n: int) -> list[float]:
     return sorted(set(round(min(max(t, 0.0), dur - 0.04), 2) for t in times))
 
 
+def resolution_args(ws: Path, quality: str) -> list[str]:
+    """Manim's -r for a vertical video (-qh 1080x1920, -qm 720x1280, -ql 480x854); none for 16:9."""
+    if not _aspect.is_vertical(ws):
+        return []
+    w, h = {"h": (1080, 1920), "m": (720, 1280), "l": (480, 854)}[quality]
+    return ["-r", f"{w},{h}"]
+
+
 def extract_frames(ws: Path, sid: str, mp4: Path, n: int, extra: list[float] | None = None) -> tuple[list[str], str]:
-    """Review frames (≤960 px wide) and a contact sheet: a 2x2 grid for 4 frames, else a vertical stack."""
+    """Review frames (≤960 px on the long side) and a contact sheet: a 2x2 grid for 4 frames, else a stack."""
     fdir = ws / "frames"
     fdir.mkdir(parents=True, exist_ok=True)
     for old in fdir.glob(f"{sid}_*.jpg"):
         old.unlink()
     dur = ffprobe_duration(mp4)
     times = sorted(set(frame_times(dur, n) + [round(t, 2) for t in (extra or []) if 0 <= t < dur]))
+    scale = "scale=-2:'min(960,ih)'" if _aspect.is_vertical(ws) else "scale='min(960,iw)':-2"
 
     def grab(it: tuple[int, float]) -> str | None:
         i, t = it
         out = fdir / f"{sid}_{i}.jpg"
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-ss", f"{t:.2f}", "-i", str(mp4),
-                        "-frames:v", "1", "-vf", "scale='min(960,iw)':-2", "-q:v", "3", str(out)], check=False)
+                        "-frames:v", "1", "-vf", scale, "-q:v", "3", str(out)], check=False)
         return str(out) if out.exists() else None
 
     with cf.ThreadPoolExecutor(max_workers=4) as pool:
@@ -358,6 +375,8 @@ def review_sheets(ws: Path, per_image: int = 6) -> dict:
     for old in fdir.glob("_review_*.jpg"):
         old.unlink()
     tw, th = 448, 252
+    if _aspect.is_vertical(ws):  # tall tiles; fewer rows per sheet so it stays a readable size
+        tw, th, per_image = 216, 384, min(per_image, 4)
     srcs: dict[str, Path] = {}
     missing = []
     for sid in ids:
@@ -443,8 +462,8 @@ def _render_one(ws: Path, sid: str, quality: str, fps: int, force: bool, nframes
     media = ws / ".media" / sid
     shutil.rmtree(media, ignore_errors=True)
     (ws / "logs" / f"{sid}.cues.json").unlink(missing_ok=True)
-    cmd = [str(VENV_BIN / "manim"), "render", QUALITY[quality], "--fps", str(fps), "--disable_caching",
-           "--media_dir", str(media), "-o", sid, str(src), cls]
+    cmd = [str(VENV_BIN / "manim"), "render", QUALITY[quality], *resolution_args(ws, quality), "--fps", str(fps),
+           "--disable_caching", "--media_dir", str(media), "-o", sid, str(src), cls]
     with render_slot(ws) as slot_wait:
         t0 = time.time()
         proc = subprocess.run(cmd, cwd=ws, env=toolchain_env(ws, sid), capture_output=True, text=True)
@@ -473,6 +492,8 @@ def _render_one(ws: Path, sid: str, quality: str, fps: int, force: bool, nframes
     meta_f.write_text(json.dumps({"hash": h, "duration": dur, "quality": quality, "fps": fps,
                                   "class": cls, "rendered_at": time.strftime("%Y-%m-%dT%H:%M:%S")}, indent=1))
     res = {"id": sid, "ok": True, "seconds": round(time.time() - t0, 1), "duration": round(dur, 2)}
+    if _aspect.is_vertical(ws):
+        res["aspect"] = "9:16"  # a vertical video: stack, don't spread (manim-scenes style guide)
     if preview:
         res["preview"] = True
     if waited >= 1:
@@ -504,16 +525,18 @@ def _render_one(ws: Path, sid: str, quality: str, fps: int, force: bool, nframes
 
 def render_stings(ws: Path) -> dict:
     src = (LIB / "waitwhat_style.py").read_bytes()
-    key = hashlib.sha256(src).hexdigest()[:12]
+    asp = _aspect.aspect_of(ws)
+    key = hashlib.sha256(src).hexdigest()[:12] + ("" if asp == _aspect.LANDSCAPE else "-9x16")
     env = toolchain_env(ws)
     env["WAITWHAT_THEME"] = "classic"  # the brand stings are always on black
+    env["WAITWHAT_ASPECT"] = asp       # and in the video's aspect, so the concat stays a stream copy
     cache = ROOT / ".cache" / "stings" / key
     if not (cache / "Intro.mp4").exists() or not (cache / "Outro.mp4").exists():
         cache.mkdir(parents=True, exist_ok=True)
         f = cache / "sting.py"
         f.write_text("from waitwhat_style import *\n\nclass Intro(WaitwhatIntro):\n    pass\n\n"
                      "class Outro(WaitwhatOutro):\n    pass\n")
-        proc = subprocess.run([str(VENV_BIN / "manim"), "render", "-qh", "--fps", "30", "--disable_caching",
+        proc = subprocess.run([str(VENV_BIN / "manim"), "render", "-qh", *resolution_args(ws, "h"), "--fps", "30", "--disable_caching",
                                "--media_dir", str(cache / "media"), str(f), "Intro", "Outro"],
                               cwd=cache, env=env, capture_output=True, text=True)
         if proc.returncode != 0:

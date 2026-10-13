@@ -60,7 +60,7 @@ Create a job dir and run the agent with it as the working directory:
   inputs/                   attachments (+ the refine frame png)
   workspace/                previous version's workspace when refining; otherwise empty
   .waitwhat/progress.json   {stage, message, scenes:[{index,title,status}]}  ← poll this
-  out/video.mp4             1920x1080, h264 + aac
+  out/video.mp4             1920x1080 (request.aspect "9:16": 1080x1920), h264 + aac
   out/thumbnail.jpg
   out/manifest.json         {title, scenes:[{index,title,narration,start,duration}]}
 ```

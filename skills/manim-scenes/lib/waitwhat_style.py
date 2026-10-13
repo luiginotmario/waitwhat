@@ -16,6 +16,9 @@ What you get:
   * concept colours that stay consistent across scenes (`color_of("hypotenuse")`, read from plan.json)
   * narration-driven timing (`until`, `play_until`, `wait_until`, `finish`) using the per-scene
     audio timings written by scripts/tts.py
+  * both aspects: 16:9 (1920x1080, 14.22 x 8 units) or 9:16 (1080x1920, 8 x 14.22 units) from
+    plan.json "aspect"; ASPECT, IS_VERTICAL, the SAFE_* area, MAIN axis and helpers (place_title,
+    side_by_side, flow, spots, fit_safe, by_aspect) so one layout adapts; type scales up in 9:16
   * a layout lint that records overlapping or off-frame text to workspace/logs/<id>.layout.json
   * small helpers (text, math, pencil circle, flow boxes, arrows, entrances) and the brand stings
   * themes (plan.json "theme"): the palette constants below adapt to the video's world, and a
@@ -64,23 +67,71 @@ def _read_plan_for_theme() -> dict:
         return {}
 
 
+_PLAN0 = _read_plan_for_theme()
+
 # The video's world, resolved once per render (one scene per process): WAITWHAT_THEME env, then
 # plan.scenes[].theme, then plan.theme, else "classic" (pure black). Scene code never hard-codes
 # hex colours: the names below (INK, BLUE, YELLOW...) already hold this theme's values.
-THEME, THEME_OPTS = _themes.resolve(_read_plan_for_theme(), os.environ.get("WAITWHAT_SCENE_ID"))
+THEME, THEME_OPTS = _themes.resolve(_PLAN0, os.environ.get("WAITWHAT_SCENE_ID"))
 _T = _themes.THEMES[THEME]
 _C = _T["colors"]
 THEMES = ("classic", "studio", "chalkboard", "blueprint", "space", "ocean", "city", "whiteboard", "graph_paper", "paper", "hills")
 assert set(THEMES) == set(_themes.THEMES)
 IS_DARK = bool(_T["dark"])
-#: lowest y content should use; themes with a skyline or hills along the bottom raise it
-FLOOR_Y = float(_T.get("floor", -3.5))
+
+# --------------------------------------------------------------------------- aspect + frame
+# One render per video, laid out for its aspect from the start (never cropped): WAITWHAT_ASPECT env,
+# then plan.json "aspect", then <job>/request.json "aspect", else 16:9. Same rule as scripts/aspect.py.
+_ASPECT_WORDS = {"16:9": "16:9", "landscape": "16:9", "horizontal": "16:9", "wide": "16:9",
+                 "9:16": "9:16", "vertical": "9:16", "portrait": "9:16", "tall": "9:16"}
+
+
+def _resolve_aspect(plan: dict) -> str:
+    req = {}
+    ws = os.environ.get("WAITWHAT_WORKSPACE")
+    if ws:
+        try:
+            req = json.loads((Path(ws).parent / "request.json").read_text())
+        except Exception:
+            req = {}
+    for v in (os.environ.get("WAITWHAT_ASPECT"), plan.get("aspect"), req.get("aspect")):
+        if isinstance(v, str) and v.strip().lower() in _ASPECT_WORDS:
+            return _ASPECT_WORDS[v.strip().lower()]
+    return "16:9"
+
+
+#: "16:9" (1920x1080, 14.22 x 8 units) or "9:16" (1080x1920, 8 x 14.22 units)
+ASPECT = _resolve_aspect(_PLAN0)
+IS_VERTICAL = ASPECT == "9:16"
+if IS_VERTICAL:
+    # Same 135 px per unit as 16:9, turned on its side: 8 units wide, 14.22 tall.
+    if config.pixel_width > config.pixel_height:
+        config.pixel_width, config.pixel_height = config.pixel_height, config.pixel_width
+    config.frame_height = 8.0 * 16 / 9
+    config.frame_width = 8.0
 
 config.background_color = _T["bg"]
-FRAME_W = config.frame_width      # 14.22
-FRAME_H = config.frame_height     # 8.0
-SAFE_W = FRAME_W - 1.2            # keep ~0.6 units of margin left/right
-SAFE_H = FRAME_H - 0.9            # and ~0.45 top/bottom
+FRAME_W = config.frame_width      # 14.22 (9:16: 8.0)
+FRAME_H = config.frame_height     # 8.0 (9:16: 14.22)
+#: lowest y content should use; themes with a skyline or hills along the bottom raise it
+FLOOR_Y = float(_themes.content_floor(THEME, FRAME_H))
+# Margins. 9:16 keeps thumb-safe sides, clears the feed's top bar, and leaves the bottom ~15 % (where
+# vertical players put captions, buttons and their progress bar) free of anything that must be read.
+SAFE_W = FRAME_W - (1.1 if IS_VERTICAL else 1.2)              # 16:9: ~0.6 units of margin left/right
+SAFE_TOP = FRAME_H / 2 - (0.9 if IS_VERTICAL else 0.45)       # highest y for content
+SAFE_BOTTOM = max(-FRAME_H / 2 + (0.15 * FRAME_H if IS_VERTICAL else 0.45),
+                  FLOOR_Y if "floor" in _T else -FRAME_H)       # lowest y for text
+SAFE_H = (SAFE_TOP - SAFE_BOTTOM) if IS_VERTICAL else FRAME_H - 0.9
+SAFE_LEFT, SAFE_RIGHT = -SAFE_W / 2, SAFE_W / 2
+#: centre of the area content may use (9:16: a little above the frame's centre)
+SAFE_CENTER = np.array([0.0, (SAFE_TOP + SAFE_BOTTOM) / 2, 0.0])
+#: the frame's long axis (sequences, pipelines, comparisons run along it) and its short one
+MAIN = DOWN if IS_VERTICAL else RIGHT
+CROSS = RIGHT if IS_VERTICAL else DOWN
+#: type is set larger in 9:16: a vertical video is watched on a phone, full width
+TYPE_SCALE = 1.3 if IS_VERTICAL else 1.0
+#: pixel size of the final video (the probe and refine frames use it)
+SIZE_PX = (1080, 1920) if IS_VERTICAL else (1920, 1080)
 
 BG = _T["bg"]          # classic: #000000
 INK = _T["ink"]        # primary text / strokes (classic #FFFFFF)
@@ -113,7 +164,9 @@ CONCEPT_CYCLE = [BLUE, TEAL, PINK, GOLD, GREEN, RED, PURPLE, ORANGE]
 # Opacity layers: what is being explained now / still-relevant context / scaffolding.
 PRIMARY, CONTEXT, SCAFFOLD = 1.0, 0.35, 0.15
 
-# Type scale (Manim font_size units; 48 is Manim's default).
+# Type scale (Manim font_size units; 48 is Manim's default). Nominal sizes: T(), M(), hand(), label(),
+# node() and code_block() multiply them by TYPE_SCALE (1.3 in 9:16), so the same code reads well on a
+# phone. Raw Text/MathTex(font_size=...) do not: wrap the number in sz() there.
 SIZE_TITLE = 64
 SIZE_HEAD = 48
 SIZE_BODY = 38
@@ -245,6 +298,11 @@ def color_of(concept: str, default: str | None = None) -> str:
 
 # --------------------------------------------------------------------------- text + math
 
+def sz(size: float) -> float:
+    """A nominal font size at this video's type scale, for raw Text/MathTex(font_size=sz(40))."""
+    return size * TYPE_SCALE
+
+
 def fit(mob: Mobject, max_w: float = SAFE_W, max_h: float = SAFE_H) -> Mobject:
     """Shrink (never grow) a mobject to fit a box."""
     if mob.width > max_w:
@@ -257,7 +315,7 @@ def fit(mob: Mobject, max_w: float = SAFE_W, max_h: float = SAFE_H) -> Mobject:
 def T(text: str, size: float = SIZE_BODY, color: str = INK, *, weight: str = "NORMAL",
       slant: str = "NORMAL", font: str | None = None, max_w: float = SAFE_W, **kw) -> Text:
     """Plain text in the house face. Keep it short: narration carries the words."""
-    t = Text(text, font_size=size, color=color, font=font or FONT, weight=weight, slant=slant, **kw)
+    t = Text(text, font_size=size * TYPE_SCALE, color=color, font=font or FONT, weight=weight, slant=slant, **kw)
     return fit(t, max_w)
 
 
@@ -269,7 +327,7 @@ def M(tex: str | list[str], size: float = 48, color: str = INK, colors: dict | N
     be transformed separately). Double braces isolate other parts: M("{{a^2}} + {{b^2}} = {{c^2}}").
     """
     parts = tex if isinstance(tex, list) else [tex]
-    m = MathTex(*parts, font_size=size, color=color,
+    m = MathTex(*parts, font_size=size * TYPE_SCALE, color=color,
                 substrings_to_isolate=list(colors or {}) + list(kw.pop("substrings_to_isolate", [])), **kw)
     for sub, c in (colors or {}).items():
         m.set_color_by_tex(sub, c)
@@ -286,6 +344,71 @@ def label(text: str, target: Mobject, direction=UP, size: float = SIZE_LABEL, co
     """A label attached to its target (never floating far away)."""
     lab = M(text, size=size * 1.25, color=color or INK) if math else T(text, size=size, color=color or INK)
     return lab.next_to(target, direction, buff=buff)
+
+
+# --------------------------------------------------------------------------- layout (both aspects)
+# Lay a scene out with these and the same code works in 16:9 and 9:16: things spread along x in a
+# landscape frame and stack along y in a vertical one, titles sit at the top of the safe area, and
+# everything is fitted to the area that is free (in 9:16, the bottom ~15 % stays clear).
+
+def by_aspect(landscape, vertical):
+    """One value per aspect: by_aspect(LEFT * 3.5, UP * 2.5), by_aspect(6, 3)."""
+    return vertical if IS_VERTICAL else landscape
+
+
+def safe_point(fx: float, fy: float) -> np.ndarray:
+    """A point by fraction of the safe area: safe_point(-1, 1) is its top-left corner, (0, 0) its centre."""
+    return np.array([SAFE_CENTER[0] + fx * SAFE_W / 2, SAFE_CENTER[1] + fy * (SAFE_TOP - SAFE_BOTTOM) / 2, 0.0])
+
+
+def content_box(below: Mobject | None = None, above: Mobject | None = None, buff: float = 0.35):
+    """(x0, y0, x1, y1) of the free safe area: under `below` (e.g. a title), over `above` (e.g. a caption)."""
+    top = SAFE_TOP if below is None else min(SAFE_TOP, below.get_bottom()[1] - buff)
+    bot = SAFE_BOTTOM if above is None else max(SAFE_BOTTOM, above.get_top()[1] + buff)
+    return SAFE_LEFT, bot, SAFE_RIGHT, top
+
+
+def fit_safe(mob: Mobject, below: Mobject | None = None, above: Mobject | None = None, fill: float = 1.0,
+             buff: float = 0.35) -> Mobject:
+    """Shrink (never grow) a mobject to the free safe area (see content_box) and centre it there."""
+    x0, y0, x1, y1 = content_box(below, above, buff)
+    fit(mob, (x1 - x0) * fill, (y1 - y0) * fill)
+    return mob.move_to([(x0 + x1) / 2, (y0 + y1) / 2, 0])
+
+
+def place_title(mob: Mobject, buff: float = 0.0) -> Mobject:
+    """Put a title or header at the top of the safe area, centred and fitted to its width."""
+    fit(mob, SAFE_W, SAFE_H * 0.25)
+    return mob.move_to([0, SAFE_TOP - buff - mob.height / 2, 0])
+
+
+def side_by_side(*mobs: Mobject, buff: float | None = None, below: Mobject | None = None,
+                 above: Mobject | None = None, fill: float = 1.0, aligned_edge=ORIGIN) -> VGroup:
+    """Things to compare (A vs B, before/after): a row in 16:9, a stack in 9:16. Arranged along MAIN,
+    fitted to the free safe area (under `below`) and centred in it. Returns the VGroup."""
+    gap = buff if buff is not None else by_aspect(1.2, 0.7)
+    g = VGroup(*mobs).arrange(MAIN, buff=gap, aligned_edge=aligned_edge)
+    return fit_safe(g, below, above, fill)
+
+
+def flow(*mobs: Mobject, buff: float | None = None, below: Mobject | None = None,
+         above: Mobject | None = None) -> VGroup:
+    """A sequence or pipeline (steps, stages, a timeline) along the frame's long axis: left to right
+    in 16:9, top to bottom in 9:16. Join the steps with link(a, b); it follows either direction."""
+    return side_by_side(*mobs, buff=buff if buff is not None else by_aspect(1.0, 0.55), below=below, above=above)
+
+
+def spots(n: int, below: Mobject | None = None, above: Mobject | None = None,
+          span: float | None = None) -> list[np.ndarray]:
+    """n evenly spread anchor points along the long axis (x in 16:9, top to bottom in 9:16), centred
+    in the free safe area. For things placed by position: a.move_to(spots(2)[0]), b.move_to(spots(2)[1])."""
+    x0, y0, x1, y1 = content_box(below, above)
+    c = np.array([(x0 + x1) / 2, (y0 + y1) / 2, 0.0])
+    if n <= 1:
+        return [c]
+    length = (y1 - y0) if IS_VERTICAL else (x1 - x0)
+    span = length * (n - 1) / n if span is None else span
+    return [c + MAIN * (-span / 2 + span * i / (n - 1)) for i in range(n)]
 
 
 # --------------------------------------------------------------------------- shapes + diagrams
@@ -372,21 +495,26 @@ def grid_paper(opacity: float = 1.0) -> VGroup:
     (The blueprint and graph_paper themes already draw a grid behind everything.)"""
     col = "#2b3a46" if THEME == "classic" else INK_4
     lines = VGroup()
-    for x in np.arange(-7, 7.01, 0.5):
-        lines.add(Line([x, -4, 0], [x, 4, 0], stroke_width=1 if x % 2 else 1.5,
+    hw, hh = math.ceil(FRAME_W / 2), math.ceil(FRAME_H / 2)
+    for x in np.arange(-hw, hw + 0.01, 0.5):
+        lines.add(Line([x, -hh, 0], [x, hh, 0], stroke_width=1 if x % 2 else 1.5,
                        stroke_color=col, stroke_opacity=0.35 * opacity))
-    for y in np.arange(-4, 4.01, 0.5):
-        lines.add(Line([-7.2, y, 0], [7.2, y, 0], stroke_width=1 if y % 2 else 1.5,
+    for y in np.arange(-hh, hh + 0.01, 0.5):
+        lines.add(Line([-hw - 0.2, y, 0], [hw + 0.2, y, 0], stroke_width=1 if y % 2 else 1.5,
                        stroke_color=col, stroke_opacity=0.35 * opacity))
     return lines
 
 
-def latlon(lat: float, lon: float, width: float = 12.0, center=ORIGIN) -> np.ndarray:
+#: default width of a world map: 12 units in 16:9, the safe width in 9:16
+MAP_W = SAFE_W if IS_VERTICAL else 12.0
+
+
+def latlon(lat: float, lon: float, width: float = MAP_W, center=ORIGIN) -> np.ndarray:
     """Equirectangular projection of (lat, lon) into a width-wide map centred at `center`."""
     return np.array(center) + np.array([lon / 180 * width / 2, lat / 90 * width / 4, 0])
 
 
-def geojson_shapes(path: str | Path, width: float = 12.0, center=ORIGIN, color: str = INK_3,
+def geojson_shapes(path: str | Path, width: float = MAP_W, center=ORIGIN, color: str = INK_3,
                    fill: float = 0.15, min_points: int = 8) -> VGroup:
     """Outline polygons from a GeoJSON file (e.g. public-domain Natural Earth land/countries)."""
     data = json.loads(Path(path).read_text())
@@ -429,20 +557,20 @@ def molecule(atoms: list[tuple[str, tuple[float, float]]], bonds: list[tuple[int
         ball = Circle(radius=r, stroke_width=0, fill_color=CPK.get(sym, PINK), fill_opacity=1).move_to(p)
         grp = VGroup(ball)
         if show_symbols:
-            grp.add(T(sym, size=SIZE_SMALL * scale, color=BLACK if sym in ("H", "S", "Cl", "F") else INK).move_to(p))
+            grp.add(T(sym, size=SIZE_SMALL * scale / TYPE_SCALE, color=BLACK if sym in ("H", "S", "Cl", "F") else INK).move_to(p))
         balls.add(grp)
     return VGroup(sticks, balls)
 
 
 def code_block(code: str, language: str = "python", size: float = 24) -> VGroup:
-    """Syntax-highlighted code on a subtle panel (no window chrome)."""
+    """Syntax-highlighted code on a subtle panel (no window chrome). 9:16: keep lines under ~30 chars."""
     from manim import Code
     c = Code(code_string=code.strip("\n"), language=language,
              formatter_style="monokai" if IS_DARK else "friendly",
              add_line_numbers=False, background="rectangle",
              background_config={"fill_color": _T["code_bg"], "stroke_color": INK_4, "stroke_width": 1,
                                 "corner_radius": 0.15},
-             paragraph_config={"font": FONT_MONO, "font_size": size})
+             paragraph_config={"font": FONT_MONO, "font_size": size * TYPE_SCALE})
     return fit(c)
 
 
@@ -875,8 +1003,15 @@ class WaitwhatScene(Scene):
             if x0 < -hw + 0.15 or x1 > hw - 0.15 or y0 < -hh + 0.1 or y1 > hh - 0.1:
                 self._lint.append({"t": round(self.now, 2), "issue": "off-frame", "what": name,
                                    "box": [round(v, 2) for v in (x0, y0, x1, y1)]})
-            elif FLOOR_Y > -3.5 and y0 < FLOOR_Y - 0.05:
-                self._lint.append({"t": round(self.now, 2), "issue": f"below the {THEME} scenery (keep text above y={FLOOR_Y})",
+            elif IS_VERTICAL and y0 < SAFE_BOTTOM - 0.05:
+                self._lint.append({"t": round(self.now, 2),
+                                   "issue": f"in the bottom 15% of the 9:16 frame, under the phone's player UI (keep text above y={SAFE_BOTTOM:.2f})",
+                                   "what": name, "box": [round(v, 2) for v in (x0, y0, x1, y1)]})
+            elif IS_VERTICAL and (x0 < SAFE_LEFT - 0.1 or x1 > SAFE_RIGHT + 0.1 or y1 > SAFE_TOP + 0.1):
+                self._lint.append({"t": round(self.now, 2), "issue": "outside the 9:16 safe area (thumb-safe sides / top bar)",
+                                   "what": name, "box": [round(v, 2) for v in (x0, y0, x1, y1)]})
+            elif "floor" in _T and y0 < FLOOR_Y - 0.05:
+                self._lint.append({"t": round(self.now, 2), "issue": f"below the {THEME} scenery (keep text above y={FLOOR_Y:.2f})",
                                    "what": name, "box": [round(v, 2) for v in (x0, y0, x1, y1)]})
             boxes.append((name, x0, y0, x1, y1, id(t)))
         for i in range(len(boxes)):
@@ -896,7 +1031,8 @@ class WaitwhatScene(Scene):
     def _dump_probe(self):
         """Describe what is on screen (for refine: which element did the user circle?)."""
         items = []
-        px = lambda x, y: [round((x / FRAME_W + 0.5) * 1920), round((0.5 - y / FRAME_H) * 1080)]
+        pw, ph = SIZE_PX  # output pixels (1920x1080, or 1080x1920 in 9:16)
+        px = lambda x, y: [round((x / FRAME_W + 0.5) * pw), round((0.5 - y / FRAME_H) * ph)]
         for m in self.mobjects:
             for sub in [m] + [s for s in m.submobjects if s.submobjects or isinstance(s, self._TEXTY)][:12]:
                 if sub.width == 0 and sub.height == 0:
@@ -914,7 +1050,8 @@ class WaitwhatScene(Scene):
                 })
         out = self.ws / "logs" / f"{self.scene_id}.probe.json"
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps({"scene": self.scene_id, "t": round(self.now, 2), "mobjects": items}, indent=1))
+        out.write_text(json.dumps({"scene": self.scene_id, "t": round(self.now, 2), "aspect": ASPECT,
+                                   "frame_px": list(SIZE_PX), "mobjects": items}, indent=1))
 
     def play(self, *args, sfx=None, **kwargs):
         """Scene.play, plus sound: sfx="coin" (at the start), "chime@end", "swish@mid",
@@ -986,7 +1123,11 @@ def brand_wordmark(height: float = 1.5) -> VGroup | None:
             return None
         strokes = VGroup(*[m for _, m in paths])
         strokes.flip(RIGHT)            # SVG y grows downward
-        strokes.scale_to_fit_height(height).move_to(ORIGIN)
+        strokes.scale_to_fit_height(height)
+        if strokes.width > FRAME_W * 0.78:  # 9:16: the wide wordmark fits the narrow frame
+            strokes.scale_to_fit_width(FRAME_W * 0.78)
+            height = strokes.height
+        strokes.move_to(ORIGIN)
         out = VGroup()
         for color, m in paths:
             if max(m.width, m.height) < 0.06 * height:   # dots (i, ?) are tiny round-capped strokes in SVG
@@ -1002,7 +1143,7 @@ def brand_wordmark(height: float = 1.5) -> VGroup | None:
 def _typeset_wordmark(size: float = 72):
     wait = Text("wait", font=FONT, font_size=size, color="#FFFFFF")
     what = Text("what?", font=FONT, font_size=size, color="#FFFF00")
-    return VGroup(wait, what).arrange(RIGHT, buff=0.62, aligned_edge=DOWN)
+    return fit(VGroup(wait, what).arrange(RIGHT, buff=0.62, aligned_edge=DOWN), FRAME_W * 0.78)
 
 
 class WaitwhatIntro(Scene):

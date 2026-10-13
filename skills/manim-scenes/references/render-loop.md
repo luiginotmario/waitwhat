@@ -4,7 +4,8 @@ The frames-first verification loop is adapted from iart-ai/manim-skills (MIT). S
 
 ## Commands
 - `ww render <id> [<id>…]` renders the final 1080p30 into `workspace/renders/` (what `ww stitch`
-  uses), typically in 3–7 s, so render the final directly and look at it. It skips scenes whose
+  uses; 1920×1080, or 1080×1920 when `plan.aspect` is `"9:16"`, and the JSON line then says
+  `"aspect": "9:16"`), typically in 3–7 s, so render the final directly and look at it. It skips scenes whose
   code, shared code, style lib and narration timing are unchanged, and marks each scene
   `rendering` → `done` in the job's progress (`--no-progress` to skip). `--force` to re-render
   anyway, `--all` for every scene in the plan, `-j N` scenes in parallel (default
@@ -13,7 +14,7 @@ The frames-first verification loop is adapted from iart-ai/manim-skills (MIT). S
   only worth it for very heavy scenes. Previews never touch progress or the stitch.
 - `ww render --check` imports `workspace/scenes/shared.py` with the toolchain (≈1 s).
 - `ww review` (the director, after all scenes): `workspace/frames/_review_<n>.jpg`, one row per
-  scene in plan order (first | middle | last frame), up to 6 rows per image.
+  scene in plan order (first | middle | last frame), up to 6 rows per image (4 in 9:16).
 - If `ww tts` is still voicing the scene, render waits for its audio (`--wait-audio 0` to skip).
 - Output per scene (one JSON line): `ok`, `duration`, `layout_issues`, `missing_marks`,
   `warning` (e.g. video shorter than narration, timing estimated because there is no audio yet,
@@ -47,6 +48,8 @@ Ask of every frame, and fix any "yes":
 8. Does it look like 3Blue1Brown, or like a slide deck? (Slides: bullet text, boxes of prose,
    centred titles over static content. Fix by turning words into pictures.)
 9. Does the last frame match the next scene's first frame (continuous transitions)?
+10. In 9:16: is anything spread side by side that should be stacked, is any text in the bottom
+    ~15 %, and would every label read on a phone at arm's length? (style guide, "Vertical 9:16")
 
 The automatic lint catches overlap between text objects and off-frame text, but not text over
 shapes, ugly composition or wrong timing. Your eyes are the real check.

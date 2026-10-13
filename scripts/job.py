@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Create and validate job dirs that follow the waitwhat job I/O contract.
 
-  job.py new "Why is the sky blue?" [--attach a.pdf ...] [--base ./waitwhat-videos]
+  job.py new "Why is the sky blue?" [--attach a.pdf ...] [--aspect 9:16] [--base ./waitwhat-videos]
         → ./waitwhat-videos/why-is-the-sky-blue/   (prints the path)
   job.py refine ./waitwhat-videos/why-is-the-sky-blue "wait, what is scattering?" --at 42.5 [--frame f.png]
         → ./waitwhat-videos/why-is-the-sky-blue-v2/  with the previous workspace copied in
@@ -56,7 +56,10 @@ def cmd_new(a) -> None:
         shutil.copy2(src, dst)
         atts.append({"path": str(dst.relative_to(job)), "name": src.name,
                      "mime": mimetypes.guess_type(src.name)[0] or "application/octet-stream"})
-    (job / "request.json").write_text(json.dumps({"prompt": a.prompt, "attachments": atts}, indent=1))
+    req = {"prompt": a.prompt, "attachments": atts}
+    if getattr(a, "aspect", None):
+        req["aspect"] = a.aspect
+    (job / "request.json").write_text(json.dumps(req, indent=1))
     print(job)
 
 
@@ -91,6 +94,13 @@ def cmd_refine(a) -> None:
     print(job)
 
 
+def _aspect_size(job: Path) -> tuple[int, int]:
+    """(width, height) the video must have: 1920x1080, or 1080x1920 for a 9:16 video (scripts/aspect.py)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import aspect
+    return aspect.SIZE[aspect.aspect_of(job / "workspace")]
+
+
 def cmd_check(a) -> None:
     job = Path(a.job).resolve()
     problems = []
@@ -107,8 +117,9 @@ def cmd_check(a) -> None:
         aus = [s for s in streams if s.get("codec_type") == "audio"]
         if not vs or vs[0].get("codec_name") != "h264":
             problems.append("video stream is not h264")
-        elif (vs[0].get("width"), vs[0].get("height")) != (1920, 1080):
-            problems.append(f"video is {vs[0].get('width')}x{vs[0].get('height')}, expected 1920x1080")
+        elif (vs[0].get("width"), vs[0].get("height")) != _aspect_size(job):
+            w, h = _aspect_size(job)
+            problems.append(f"video is {vs[0].get('width')}x{vs[0].get('height')}, expected {w}x{h}")
         if not aus or aus[0].get("codec_name") != "aac":
             problems.append("audio stream is not aac")
     if not (job / "out" / "thumbnail.jpg").exists():
@@ -213,6 +224,11 @@ def cmd_brief(a) -> None:
     out = {"scene": scenes[k], "position": f"{k + 1} of {len(scenes)}", "theme": plan.get("theme", "classic"),
            "palette": plan.get("palette", {}), "previous": near(k - 1), "next": near(k + 1),
            "video": {kk: plan[kk] for kk in ("title", "audience", "question", "aha", "duration_target") if kk in plan}}
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import aspect
+    out["aspect"] = aspect.aspect_of(job / "workspace")
+    if out["aspect"] == aspect.VERTICAL:
+        out["layout"] = "9:16 vertical: stack, don't spread; larger type; one central focus; nothing in the bottom 15% (manim-scenes style guide, 'Vertical 9:16')"
     if not (scenes[k].get("narration") or "").strip():
         # parallel script mode: the builder writes this scene's narration, so it needs the whole arc
         out["arc"] = [{kk: s.get(kk) for kk in ("id", "title", "say", "hands_off") if s.get(kk)} for s in scenes]
@@ -224,6 +240,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     n = sub.add_parser("new"); n.add_argument("prompt"); n.add_argument("--attach", nargs="*")
+    n.add_argument("--aspect", choices=["16:9", "9:16"], help="video format (default 16:9)")
     n.add_argument("--base", default="waitwhat-videos"); n.add_argument("--slug")
     r = sub.add_parser("refine"); r.add_argument("job"); r.add_argument("text")
     r.add_argument("--at", type=float, required=True); r.add_argument("--frame")

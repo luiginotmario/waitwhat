@@ -40,6 +40,16 @@ If B needs A's objects in a new place, *move them on screen in B*, never between
 - **Question frame**: ask (narration), show the setup, pause with `<break time="1.2s"/>`, then answer
   visually. Don't print the question as a sentence on screen; a "?" or circled gap is enough.
 
+## Adapting to 9:16 (one code path for both aspects)
+- **Two things to compare** → `side_by_side(a, b)`; or place each at `spots(2)[i]`.
+- **A wide object** (a bonded pair, a number line, a pipeline) → build it along `MAIN`, or build it
+  horizontally and turn it a quarter in 9:16 (`if IS_VERTICAL: g.rotate(-PI / 2)`), then place
+  its labels with turned directions (`by_aspect(DOWN, LEFT)`); text never rotates.
+- **A wide picture** (a lake, a skyline, a map) → draw it at its 16:9 size, then
+  `g.scale(min(1, SAFE_W / g.width))` and place its labels afterwards at full size.
+- **Shared constructors** take positions, not constants: `make_beaker(at=spots(2)[0])`, so every
+  scene that uses them adapts together.
+
 ## Per-scene skeleton
 Within one scene keep one anchor object on screen the whole time (the triangle, the map, the
 diagram). Add to it, highlight within it, dim parts of it, but don't remove it until the end.
@@ -54,4 +64,5 @@ Set `plan.thumbnail = {"scene": id, "t": seconds}` on the most striking frame (u
 Or render a still: write `workspace/scenes/thumbnail.py` with a big, simple composition (the key
 picture + at most 3 large words) and run
 `ww manim -qh -s --media_dir workspace/.media workspace/scenes/thumbnail.py Thumbnail` then copy
-the PNG to `workspace/thumbnail.png`.
+the PNG to `workspace/thumbnail.png`. In 9:16 the still comes out 1080×1920 by itself (the lib
+sets the frame) and `ww stitch` makes a 720×1280 thumbnail; 16:9 gives 1280×720.

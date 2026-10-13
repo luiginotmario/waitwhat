@@ -8,8 +8,16 @@ Everything here is implemented in `lib/waitwhat_style.py`; use the helpers rathe
 re-deriving values, so all scenes match.
 
 ## Frame
-- 16:9, 14.22 × 8 units, origin at centre. Safe area: |x| ≤ 6.5, |y| ≤ 3.5. Keep text ≥ 0.5 units
-  from every edge (the lib's layout lint flags anything closer).
+- Two aspects, chosen by the person and written to `plan.aspect` (one render per video, laid out
+  for its aspect from the start, never cropped). The lib reads it: `ASPECT`, `IS_VERTICAL`.
+  - **16:9** (default): 1920×1080, 14.22 × 8 units, origin at centre. Safe area: |x| ≤ 6.5,
+    |y| ≤ 3.5.
+  - **9:16** (vertical): 1080×1920, 8 × 14.22 units (same 135 px per unit), origin at centre.
+    Safe area: |x| ≤ 3.45, from `SAFE_TOP` (6.21) down to `SAFE_BOTTOM` (−4.98). See
+    "Vertical 9:16" below.
+- `SAFE_W`, `SAFE_H`, `SAFE_TOP`, `SAFE_BOTTOM`, `SAFE_LEFT`, `SAFE_RIGHT`, `SAFE_CENTER` hold the
+  safe area for the current aspect; `FRAME_W`/`FRAME_H` the frame. Keep text ≥ 0.5 units from
+  every edge (the lib's layout lint flags anything closer, and in 9:16 anything in the bottom band).
 - The background is the video's **theme** (`plan.theme`), painted by `WaitwhatScene` behind
   everything; it is not a mobject, so fades and `self.clear()` never touch it. Never draw your
   own full-frame background. `grid_paper()` is still allowed as a faint "workbench" backdrop on
@@ -37,7 +45,8 @@ etc. default to the theme's ink. `IS_DARK`, `THEME` and `FLOOR_Y` tell you where
 | `paper` | warm notebook, ruled lines | stories, biographies, history, gentle intros |
 | `hills` | illustrated daytime sky, clouds, hills | nature, everyday life, stories for everyone |
 
-- `city` and `hills` draw scenery along the bottom: keep content above `FLOOR_Y` (−2.6).
+- `city` and `hills` draw scenery along the bottom: keep content above `FLOOR_Y` (−2.6 in 16:9;
+  in 9:16 the scenery sits inside the bottom band, below `SAFE_BOTTOM`).
 - On light themes (`whiteboard`, `graph_paper`, `paper`, `hills`) the attention colour `YELLOW`
   is a deep amber and concept colours are marker-dark; fills at 0.3–0.5 read well.
 - `plan.theme` may also be `{"name": "space", "ambient": false}` (no background motion), or
@@ -75,6 +84,9 @@ Values below are `classic`; other themes adapt them (same names, same meanings),
 ## Type
 - Words: `T(text, size=…)` in CMU Serif. Sizes: `SIZE_TITLE` 64, `SIZE_HEAD` 48, `SIZE_BODY` 38,
   `SIZE_LABEL` 32, `SIZE_SMALL` 26 (minimum). Sentence case. No full stops on labels.
+- These are nominal sizes: `T`, `M`, `hand`, `label`, `node` and `code_block` multiply them by
+  `TYPE_SCALE` (1.0 in 16:9, 1.3 in 9:16, because a vertical video is watched full width on a
+  phone). Raw `Text(...)`/`MathTex(...)` don't: pass `font_size=sz(40)`.
 - Math: `M(r"…")` (LaTeX, Computer Modern, matches CMU Serif). Colour parts with
   `M(r"{{a}}^2 + {{b}}^2 = {{c}}^2", colors={"a": color_of("a"), …})`.
 - Handwriting: `hand("wait, what?")` in yellow, only for asides and arrows-with-notes.
@@ -86,9 +98,51 @@ Values below are `classic`; other themes adapt them (same names, same meanings),
 - One focal object per scene, centred or slightly left, 50–70 % of frame width.
 - Labels sit on or right next to their objects (`label(...)`, `next_to(buff=0.2)`), never in a
   legend far away.
-- Two-panel layouts: left/right halves centred at x = ±3.4, a faint divider if needed.
+- Two-panel layouts: `side_by_side(a, b)` (16:9: left/right halves around x = ±3.4; 9:16: one
+  above the other). A faint divider if needed.
 - A formula that summarises a picture goes above or below it, not on top of it.
 - Before adding something, ask what already occupies that region; move or dim it first.
+- **Write layouts that adapt**, so a scene is right in either aspect without a second version:
+
+  | Helper | Does |
+  | --- | --- |
+  | `place_title(mob)` | top of the safe area, centred, fitted to its width |
+  | `side_by_side(a, b, below=title)` | compare: a row in 16:9, a stack in 9:16; fitted, centred in the free area |
+  | `flow(*steps)` | a sequence or pipeline along `MAIN` (→ in 16:9, ↓ in 9:16); join with `link(a, b)` |
+  | `spots(n)` | n anchor points along `MAIN`, for things placed by position |
+  | `fit_safe(mob, below=title)` | shrink to the free safe area and centre there |
+  | `content_box(below, above)` | the free safe area as (x0, y0, x1, y1) |
+  | `safe_point(fx, fy)` | a point by fraction of the safe area (−1…1) |
+  | `by_aspect(a, b)` | a value per aspect: `by_aspect(LEFT * 3.5, UP * 2.5)` |
+
+  `MAIN` is the frame's long axis (`RIGHT` in 16:9, `DOWN` in 9:16), `CROSS` the short one. A
+  hard-coded `LEFT * 5` or `move_to([6, 0, 0])` is off-frame in 9:16 (|x| ≤ 3.45): derive
+  positions from these instead.
+
+## Vertical 9:16
+
+A vertical video is watched on a phone, full screen, often with the sound low and a thumb over
+the screen. Compose for that from the start; never shrink a landscape layout into it.
+
+- **Stack, don't spread.** Side by side becomes one above the other (`side_by_side`, `flow`,
+  `spots`); sequences, timelines and pipelines run top to bottom; a wide object (a pair of
+  molecules, a number line, a map) turns a quarter or is fitted to the width. At most two
+  things side by side, and only when they are narrow (two bars, two numbers).
+- **Larger type, fewer words.** `T`/`M` already scale by 1.3; keep labels to 1–3 words, break a
+  long one onto two lines (`"hydrogen\nbond"`), and never go below `SIZE_SMALL`. A line of
+  text should fit in ~6.9 units without shrinking; if `fit()` had to shrink it, shorten it.
+- **One central focus.** One object, centred on `SAFE_CENTER` (slightly above the frame's
+  middle), filling 60–80 % of the width. Context goes above or below it, never beside it.
+- **Thumb-safe margins.** Nothing that must be read within 0.55 units of the sides or in the
+  top 0.9 units (the feed's top bar).
+- **Keep the bottom ~15 % clear** (y below `SAFE_BOTTOM` = −4.98): vertical players put the
+  caption, the buttons and their progress bar there. Scenery (the `city` skyline, `hills`) may
+  sit there; labels, numbers and formulas never. The lint flags text in that band.
+- **Titles at the top.** `place_title(...)` puts them under the top bar; build the picture
+  below with `below=title`.
+- **Code** (`code_block`) only with short lines (≤ ~30 characters); split long lines.
+- **Check the sheet as a phone**: hold the 2x2 sheet at arm's length; if a label is hard to read
+  there, it is too small or too long.
 
 ## Motion
 - Entrances: `enter(m)` (fade up from 94 % scale, strong ease-out, ~0.7 s; staggers groups).
@@ -139,6 +193,7 @@ Sound is logged from the animations themselves (`ww stitch` mixes it under the v
   changes continuously. Show real values, not placeholders.
 
 ## Brand stings
+They follow the video's aspect (the wordmark is fitted to the narrow frame in 9:16).
 `ww render --stings` renders the ~1.7 s intro (the hand-lettered wordmark from `brand/wordmark.svg`
 drawing itself on in chalk, blue question mark) and the 2.4 s outro. `ww stitch` adds them automatically (turn off with `plan.sound.intro/outro = false`).
 Don't add another title card after the intro; go straight into the hook.
