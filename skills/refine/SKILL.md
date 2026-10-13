@@ -12,6 +12,13 @@ like the same video, just clearer at that moment.
 
 ## Inputs
 - `request.json` → `refine: {text, at_seconds, frame_path}` (frame relative to the job dir).
+  `text` is either the viewer's own words, or a **conversation summary**: on the web the viewer
+  usually asks first and gets an instant answer, then presses "Rebuild the video with this". The
+  text then starts with `From a conversation about m:ss:` and has three lines: `Unclear:` (what
+  confused them, in their terms), `Explained:` (the explanation that worked for them) and
+  `Change:` (a suggested fix). Treat `Unclear` as the confusion to diagnose and `Explained` as the
+  framing that has already landed with this viewer, so build the new scene around it. `Change` is a
+  hint, not an order: still run the diagnosis below.
 - `workspace/` = the previous version: `plan.json`, `scenes/`, `audio/`, `renders/`,
   `timeline.json`, `versions.md`. Everything not touched is reused as-is (render and TTS caches
   are keyed by content, so unchanged scenes cost nothing).
