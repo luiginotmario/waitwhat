@@ -127,6 +127,22 @@ def cmd_check(a) -> None:
     print(f"✓ {job} satisfies the job contract")
 
 
+def cmd_brief(a) -> None:
+    """A scene builder's brief: its plan.json entry, the neighbours' handoff details, theme and palette."""
+    job = Path(a.job).resolve()
+    plan = json.loads((job / "workspace" / "plan.json").read_text())
+    scenes = plan.get("scenes", [])
+    k = next((i for i, s in enumerate(scenes) if s.get("id") == a.id), None)
+    if k is None:
+        sys.exit(f"brief: no scene '{a.id}' in plan.json (ids: {', '.join(s.get('id', '?') for s in scenes)})")
+    keys = ("id", "title", "visual", "build", "transition", "energy", "theme")
+    near = lambda i: {kk: scenes[i][kk] for kk in keys if kk in scenes[i]} if 0 <= i < len(scenes) else None
+    out = {"scene": scenes[k], "position": f"{k + 1} of {len(scenes)}", "theme": plan.get("theme", "classic"),
+           "palette": plan.get("palette", {}), "previous": near(k - 1), "next": near(k + 1),
+           "video": {kk: plan[kk] for kk in ("title", "audience", "question") if kk in plan}}
+    print(json.dumps(out, indent=1, ensure_ascii=False))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -135,8 +151,9 @@ def main() -> None:
     r = sub.add_parser("refine"); r.add_argument("job"); r.add_argument("text")
     r.add_argument("--at", type=float, required=True); r.add_argument("--frame")
     c = sub.add_parser("check"); c.add_argument("job", nargs="?", default=".")
+    b = sub.add_parser("brief"); b.add_argument("id"); b.add_argument("--job", default=".")
     a = ap.parse_args()
-    {"new": cmd_new, "refine": cmd_refine, "check": cmd_check}[a.cmd](a)
+    {"new": cmd_new, "refine": cmd_refine, "check": cmd_check, "brief": cmd_brief}[a.cmd](a)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,11 @@
   fetch.py https://example.com            → workspace/research/example-com.md (prints the path)
   fetch.py https://example.com/pricing -o workspace/research/pricing.md
   fetch.py --search "acme payroll api pricing"   (Jina search; needs JINA_API_KEY)
+  fetch.py URL URL ... --search "q1" --search "q2"   # everything at once, fetched in parallel
 
+Give every URL and search of a research round in ONE call: they are fetched concurrently (one
+line of output each; a failed one doesn't stop the others). Pages already in workspace/research/
+(e.g. prefetched by the web planner, see request.json `research`) are skipped unless --force.
 Uses https://r.jina.ai/<url>; JINA_API_KEY (optional) raises rate limits. Each saved file starts
 with a header recording the source URL and fetch time, so every fact can be traced back.
 Stdlib only.
@@ -12,6 +16,7 @@ Stdlib only.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures as cf
 import os
 import re
 import sys
@@ -62,35 +67,62 @@ def get(url: str, headers: dict) -> str:
     return ""
 
 
+def slug_for_url(url: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", re.sub(r"https?://(www\.)?", "", url.lower())).strip("-")[:60]
+
+
+def fetch_one(kind: str, what: str, out: Path | None, ws: Path, headers: dict, force: bool) -> str:
+    if kind == "search":
+        source = f"search: {what}"
+        slug = "search-" + re.sub(r"[^a-z0-9]+", "-", what.lower()).strip("-")[:50]
+        url = "https://s.jina.ai/" + urllib.parse.quote(what)
+    else:
+        source = what if re.match(r"https?://", what) else "https://" + what
+        slug = slug_for_url(source)
+        url = "https://r.jina.ai/" + source
+    out = out or ws / "research" / f"{slug}.md"
+    if out.exists() and not force and out.stat().st_size > 200:
+        return f"{out}  (already fetched, {out.stat().st_size:,} bytes)"
+    text = get(url, headers)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(f"<!-- source: {source} | fetched: {time.strftime('%Y-%m-%d %H:%M')} -->\n\n{text}")
+    return f"{out}  ({len(text):,} chars)"
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("url", nargs="?")
-    ap.add_argument("-o", "--out")
-    ap.add_argument("--search")
+    ap.add_argument("url", nargs="*")
+    ap.add_argument("-o", "--out", help="output file (a single URL or search only)")
+    ap.add_argument("--search", action="append", default=[])
     ap.add_argument("--ws", default="workspace")
+    ap.add_argument("--force", action="store_true", help="re-fetch pages that are already saved")
     a = ap.parse_args()
-    headers = {"Accept": "text/plain", "X-Return-Format": "markdown", "User-Agent": "waitwhat/1.0"}
+    headers = {"Accept": "text/plain", "X-Return-Format": "markdown", "X-Retain-Images": "none",
+               "User-Agent": "waitwhat/1.0"}
     key = os.environ.get("JINA_API_KEY", "").strip()
     if key:
         headers["Authorization"] = f"Bearer {key}"
-
-    if a.search:
-        if not key:
-            sys.exit("fetch: --search needs JINA_API_KEY; use your web search tool instead")
-        text = get("https://s.jina.ai/" + urllib.parse.quote(a.search), headers)
-        source = f"search: {a.search}"
-        slug = "search-" + re.sub(r"[^a-z0-9]+", "-", a.search.lower()).strip("-")[:50]
-    elif a.url:
-        url = a.url if re.match(r"https?://", a.url) else "https://" + a.url
-        text = get("https://r.jina.ai/" + url, headers)
-        source = url
-        slug = re.sub(r"[^a-z0-9]+", "-", re.sub(r"https?://(www\.)?", "", url.lower())).strip("-")[:60]
-    else:
+    if a.search and not key:
+        sys.exit("fetch: --search needs JINA_API_KEY")
+    jobs = [("url", u) for u in a.url] + [("search", q) for q in a.search]
+    if not jobs:
         ap.error("give a url or --search")
-    out = Path(a.out) if a.out else Path(a.ws) / "research" / f"{slug}.md"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(f"<!-- source: {source} | fetched: {time.strftime('%Y-%m-%d %H:%M')} -->\n\n{text}")
-    print(f"{out}  ({len(text):,} chars)")
+    if a.out and len(jobs) > 1:
+        ap.error("-o works with a single URL or search")
+    out = Path(a.out) if a.out else None
+
+    def one(job: tuple[str, str]) -> tuple[bool, str]:
+        try:
+            return True, fetch_one(job[0], job[1], out, Path(a.ws), headers, a.force)
+        except BaseException as e:  # get() raises SystemExit on HTTP errors; report and carry on
+            return False, f"fetch: FAILED {job[1]}: {e}"
+
+    with cf.ThreadPoolExecutor(max_workers=min(8, len(jobs))) as pool:
+        results = list(pool.map(one, jobs))
+    for ok, line in results:
+        print(line, file=sys.stdout if ok else sys.stderr)
+    if not any(ok for ok, _ in results):
+        sys.exit(1)
 
 
 if __name__ == "__main__":

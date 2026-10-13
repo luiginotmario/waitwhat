@@ -150,5 +150,6 @@ symbols and numbers the way a person says them.
 After `ww tts` (or `ww tts --wait` for a background run), read the printed lines. A scene far longer than planned means the narration is
 too long for its idea: trim words, not pauses. An `align=stt:…%` below ~90% means the voice said
 something other than the script (an odd number, a misread name); fix it with a pronunciation.
-Below 60%, `tts.py` falls back to proportional timing. Listen to one scene if you can (`afplay
-workspace/audio/<id>.wav`) before rendering everything.
+Below 60%, `tts.py` falls back to proportional timing. In an interactive session you may listen
+to one scene (`afplay workspace/audio/<id>.wav`); headless runs (the worker) read the printed
+lines at the review step (`ww tts --wait`) and don't wait for the voice before fanning out.

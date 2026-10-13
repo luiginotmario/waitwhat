@@ -67,19 +67,20 @@ end with `self.finish(fade=True)` and mark `"cut"`. Patterns in `references/patt
 
 ## Render → fix → look
 
-1. `ww render <id> --preview` for every look while iterating (480p15, about 2-3x faster), then
-   `ww render <id>` once for the final 1080p30. Unchanged scenes are skipped.
+1. `ww render <id>` renders the final 1080p30 in a few seconds: render the final directly and look
+   at it (it also marks the scene's progress). Unchanged scenes are skipped. `--preview` (480p15,
+   about 2x faster) is only worth it for very heavy scenes.
 2. On failure the traceback is printed. Fix the cause, not the symptom. **Max 3 attempts**; then
    simplify the visual (fewer objects, no LaTeX trick, no updater) and say so.
    Common errors and fixes: `references/gotchas.md`.
-3. On success, **look** at `workspace/frames/<id>_sheet.jpg` (3 frames, top to bottom in time;
-   from the latest render, preview or final).
+3. On success, **look** at `workspace/frames/<id>_sheet.jpg` (a 2x2 grid in time order: the
+   first frame, ~40 %, ~75 %, the last frame before any fade-out; from the latest render).
    Also read `layout_issues` in the JSON line (overlapping or off-frame text found by the lib).
    Fix: overlapping or clipped text, labels far from their objects, tiny text, empty or
    cluttered frames, colour drift, things that should have been dimmed. Checklist in
    `references/render-loop.md`.
-4. Preview again after fixes. A scene is done when you would be happy to pause on any frame;
-   then render the final once.
+4. Render again after fixes and look once more. Fix only real defects; a clean sheet is done.
+   A scene is done when you would be happy to pause on any frame.
 
 For videos of 3+ scenes the orchestrator runs this loop in parallel subagents, one per scene
 (the waitwhat skill's `references/subagents.md` and `references/scene-builder.md`); they report

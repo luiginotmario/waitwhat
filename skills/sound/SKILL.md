@@ -72,6 +72,7 @@ money moves. They sit well under the voice and land on the frame where the event
   turns everything off.
 
 ## Loudness
-Final mix is normalised with `loudnorm` to -16 LUFS integrated, -1.5 dBTP, LRA 11 (web/podcast
-norm). After stitching you can check with
+Final mix is normalised to -16 LUFS integrated (measured with ebur128, then one linear gain) with
+a look-ahead limiter keeping true peaks under -1.5 dBTP (web/podcast norm); `ww stitch` prints the
+gain it applied. After stitching you can check with
 `ffmpeg -i out/video.mp4 -af ebur128=framelog=quiet -f null -` (expect I ≈ -16 LUFS).

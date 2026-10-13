@@ -10,9 +10,14 @@ Reads workspace/plan.json, renders/<id>.mp4, audio/<id>.{wav,json}; writes
   out/manifest.json    {title, scenes:[{index,title,narration,start,duration}]}
   workspace/timeline.json   segment start/duration per scene id (used by refine and render --probe)
 
-Audio: narration placed at each scene's start + lead_in; a music bed (procedural, or a file) ducked
-under the voice with sidechaincompress; sound effects (see below) on their own bus, also ducked
-under the voice; then loudnorm. Run it with the plugin venv (numpy), e.g. via scripts/ww stitch.
+Video: the scene renders are concatenated as they are (stream copy, no re-encode) when they all
+come from the same encoder settings and none needs a freeze-frame pad; otherwise every segment is
+re-encoded (libx264, in parallel). Audio: narration placed at each scene's start + lead_in; a music
+bed (procedural, cached, made in parallel with the rest; or a file) ducked under the voice with
+sidechaincompress; sound effects (see below) on their own bus, also ducked under the voice; then a
+linear gain to -16 LUFS (measured with ebur128) with a peak limiter, encoded straight into the final
+mux. Also writes workspace/frames/_final.jpg (frames across the finished video + the thumbnail) for
+one last look. Run it with the plugin venv (numpy), e.g. via scripts/ww stitch.
 
 Sound effects come from the curated library in assets/sfx (library.json: several takes per sound,
 loudness-matched, with the onset of each take). The cues are the ones each scene logged against
@@ -28,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures as cf
+import hashlib
 import json
 import os
 import re
@@ -62,6 +68,79 @@ def duration(p: Path) -> float:
         return float(ffprobe(p).splitlines()[0])
     except (ValueError, IndexError):
         return 0.0
+
+
+def probe_video(p: Path) -> dict:
+    """Stream parameters that must match for a stream-copy concat (incl. the SPS/PPS hash)."""
+    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_data_hash", "sha256",
+                          "-show_entries", "stream=codec_name,profile,width,height,pix_fmt,r_frame_rate,time_base,"
+                          "extradata_hash", "-of", "json", str(p)], capture_output=True, text=True).stdout
+    try:
+        st = json.loads(out or "{}").get("streams", [{}])[0]
+    except (ValueError, IndexError):
+        return {}
+    return {k: st.get(k) for k in ("codec_name", "profile", "width", "height", "pix_fmt", "r_frame_rate",
+                                   "time_base", "extradata_hash")}
+
+
+def copy_concat_ok(segs: list[dict]) -> tuple[bool, str]:
+    """True when every segment can be concatenated without re-encoding."""
+    if any(s["pad"] > 0.01 for s in segs):
+        return False, "a segment needs a freeze-frame pad"
+    with cf.ThreadPoolExecutor(max_workers=8) as pool:
+        params = list(pool.map(lambda s: probe_video(s["video"]), segs))
+    want = {"codec_name": "h264", "width": W, "height": H, "pix_fmt": "yuv420p", "r_frame_rate": f"{FPS}/1"}
+    for s, pr in zip(segs, params):
+        bad = [k for k, v in want.items() if pr.get(k) != v]
+        if bad or not pr.get("extradata_hash"):
+            return False, f"{s['id']}: {', '.join(bad) or 'no extradata'} differs"
+    if len({(pr["profile"], pr["time_base"], pr["extradata_hash"]) for pr in params}) != 1:
+        return False, "segments come from different encoder settings"
+    return True, "stream copy"
+
+
+def music_bed(mood: str, seconds: float, seed: int, out: Path) -> None:
+    """The procedural bed, cached by (music.py, mood, length, seed): a re-stitch reuses it."""
+    src = ROOT / "scripts" / "music.py"
+    key = hashlib.sha256(src.read_bytes() + f"|{mood}|{seconds:.1f}|{seed}".encode()).hexdigest()[:16]
+    cache = ROOT / ".cache" / "music" / f"{mood}-{key}.wav"
+    if not cache.exists():
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        part = cache.with_suffix(f".{os.getpid()}.part.wav")
+        run([sys.executable, str(src), "bed", "--mood", mood, "--seconds", f"{seconds:.1f}", "--seed", str(seed),
+             "-o", str(part)])
+        os.replace(part, cache)
+        for old in sorted(cache.parent.glob("*.wav"), key=lambda q: q.stat().st_mtime)[:-20]:
+            old.unlink(missing_ok=True)  # keep the cache small
+    shutil.copy2(cache, out)
+
+
+def loudness(p: Path) -> tuple[float | None, float | None]:
+    """(integrated LUFS, true peak dBTP) via ffmpeg's ebur128 (≈1 s for a 5-minute mix)."""
+    err = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(p), "-af", "ebur128=peak=true", "-f", "null", "-"],
+                         capture_output=True, text=True).stderr
+    summary = err[err.rfind("Summary:"):] if "Summary:" in err else err
+    i = re.search(r"I:\s+(-?[\d.]+|-inf) LUFS", summary)
+    tp = re.search(r"Peak:\s+(-?[\d.]+|-inf) dBFS", summary)
+    f = lambda m: float(m.group(1)) if m and m.group(1) != "-inf" else None
+    return f(i), f(tp)
+
+
+def final_sheet(video: Path, thumb: Path, out: Path, total: float, n: int = 7) -> None:
+    """frames/_final.jpg: n frames across the finished video plus the thumbnail, 2 columns."""
+    tw, th = 640, 360
+    ins: list[str] = []
+    for k in range(n):
+        ins += ["-ss", f"{total * (k + 0.5) / n:.2f}", "-i", str(video)]
+    ins += ["-i", str(thumb)]
+    m = n + 1
+    fc = "".join(f"[{i}:v]trim=end_frame=1,scale={tw}:{th}:force_original_aspect_ratio=decrease,"
+                 f"pad={tw + 6}:{th + 6}:0:0:0x444444,setsar=1[p{i}];" for i in range(m))
+    layout = "|".join(f"{(i % 2) * (tw + 6)}_{(i // 2) * (th + 6)}" for i in range(m))
+    fc += "".join(f"[p{i}]" for i in range(m)) + f"xstack=inputs={m}:layout={layout}:fill=0x444444"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", *ins, "-filter_complex", fc, "-frames:v", "1", "-q:v", "3",
+                    str(out)], check=False)
 
 
 def read_wav(p: Path) -> np.ndarray:
@@ -289,8 +368,10 @@ def main() -> None:
 
     # ------------------------------------------------------------------ segments
     if snd["intro"] or snd["outro"]:  # cached by style-lib hash, so this is a copy unless the lib changed
-        subprocess.run([sys.executable, str(ROOT / "scripts" / "render.py"), "--ws", str(ws), "--stings"],
-                       check=True, stdout=subprocess.DEVNULL)
+        import render  # sibling script (stdlib only)
+        st = render.render_stings(ws)
+        if not st.get("ok"):
+            sys.exit(f"stitch: intro/outro sting failed:\n{st.get('error', '')}")
     segs = []
     if snd["intro"]:
         segs.append({"id": "_intro", "video": ws / "renders" / "_intro.mp4"})
@@ -319,29 +400,54 @@ def main() -> None:
         s["pad"] = max(0.0, s["duration"] - dv)
         s["start"] = round(t, 3)
         t += s["duration"]
+    planned_total = t
 
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory() as td, cf.ThreadPoolExecutor(max_workers=2) as side:
         tmp = Path(td)
-        # -------------------------------------------------------------- video
-        def encode(k: int, s: dict) -> str:
-            seg = tmp / f"seg{k:04d}.mp4"
-            vf = (f"fps={FPS},scale={W}:{H}:force_original_aspect_ratio=decrease:flags=lanczos,"
-                  f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:black,format=yuv420p")
-            if s["pad"] > 0.01:
-                vf += f",tpad=stop_mode=clone:stop_duration={s['pad'] + 0.1:.3f}"
-            run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(s["video"]), "-vf", vf, "-t", f"{s['duration']:.3f}",
-                 "-an", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-r", str(FPS),
-                 "-video_track_timescale", "15360", str(seg)])
-            return f"file '{seg}'"
+        # -------------------------------------------------------------- music bed (in parallel)
+        music = str(snd.get("music") or "none")
+        bed = None
+        bed_job = None
+        if music != "none":
+            bed = tmp / "bed.wav"
+            if Path(music).expanduser().exists():
+                bed_job = side.submit(run, ["ffmpeg", "-loglevel", "error", "-y", "-stream_loop", "-1", "-i",
+                                            str(Path(music).expanduser()), "-t", f"{planned_total + 0.5:.3f}", "-ar", str(SR),
+                                            "-ac", "2", "-af",
+                                            f"afade=t=in:d=2,afade=t=out:st={max(0, planned_total - 3):.3f}:d=3", str(bed)])
+            else:
+                seed = sum(map(ord, plan.get("title", "waitwhat"))) % 1000
+                bed_job = side.submit(music_bed, music, planned_total + 0.5, seed, bed)
 
-        # Segments are independent: encode a few at once (long videos have dozens).
-        workers = max(1, min(4, (os.cpu_count() or 2) // 2))
-        with cf.ThreadPoolExecutor(max_workers=workers) as pool:
-            lst = list(pool.map(lambda ks: encode(*ks), enumerate(segs)))
-        (tmp / "list.txt").write_text("\n".join(lst))
+        # -------------------------------------------------------------- video
         video = tmp / "video.mp4"
-        run(["ffmpeg", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(tmp / "list.txt"),
-             "-c", "copy", str(video)])
+        copy_ok, why = copy_concat_ok(segs)
+        if copy_ok:
+            (tmp / "copy.txt").write_text("\n".join(f"file '{s['video']}'" for s in segs))
+            run(["ffmpeg", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(tmp / "copy.txt"),
+                 "-map", "0:v:0", "-c", "copy", "-video_track_timescale", "15360", str(video)])
+            if abs(duration(video) - planned_total) > 0.05 + 0.04 * len(segs):
+                copy_ok, why = False, f"stream copy came out {duration(video):.2f}s, expected {planned_total:.2f}s"
+        if not copy_ok:
+            def encode(k: int, s: dict) -> str:
+                seg = tmp / f"seg{k:04d}.mp4"
+                vf = (f"fps={FPS},scale={W}:{H}:force_original_aspect_ratio=decrease:flags=lanczos,"
+                      f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:black,format=yuv420p")
+                if s["pad"] > 0.01:
+                    vf += f",tpad=stop_mode=clone:stop_duration={s['pad'] + 0.1:.3f}"
+                run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(s["video"]), "-vf", vf, "-t", f"{s['duration']:.3f}",
+                     "-an", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-r", str(FPS),
+                     "-video_track_timescale", "15360", str(seg)])
+                return f"file '{seg}'"
+
+            # Segments are independent: encode a few at once (long videos have dozens).
+            workers = max(1, min(6, (os.cpu_count() or 2) // 2))
+            with cf.ThreadPoolExecutor(max_workers=workers) as pool:
+                lst = list(pool.map(lambda ks: encode(*ks), enumerate(segs)))
+            (tmp / "list.txt").write_text("\n".join(lst))
+            run(["ffmpeg", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(tmp / "list.txt"),
+                 "-c", "copy", str(video)])
+        video_mode = "copy" if copy_ok else f"re-encoded ({why})"
         vtotal = duration(video)
 
         # -------------------------------------------------------------- narration + sfx tracks
@@ -356,23 +462,10 @@ def main() -> None:
             fx = build_sfx(segs, ws, snd, n, plan.get("title", "waitwhat"))
         write_wav(tmp / "narr.wav", narr)
         write_wav(tmp / "fx.wav", fx)
+        if bed_job is not None:
+            bed_job.result()
 
-        # -------------------------------------------------------------- music bed
-        music = str(snd.get("music") or "none")
-        bed = None
-        if music != "none":
-            if Path(music).expanduser().exists():
-                bed = tmp / "bed.wav"
-                run(["ffmpeg", "-loglevel", "error", "-y", "-stream_loop", "-1", "-i", str(Path(music).expanduser()),
-                     "-t", f"{vtotal + 0.5:.3f}", "-ar", str(SR), "-ac", "2",
-                     "-af", f"afade=t=in:d=2,afade=t=out:st={max(0, vtotal - 3):.3f}:d=3", str(bed)])
-            else:
-                bed = tmp / "bed.wav"
-                seed = sum(map(ord, plan.get("title", "waitwhat"))) % 1000
-                run([sys.executable, str(ROOT / "scripts" / "music.py"), "bed", "--mood", music,
-                     "--seconds", f"{vtotal + 0.5:.3f}", "--seed", str(seed), "-o", str(bed)])
-
-        # -------------------------------------------------------------- mix + loudness
+        # -------------------------------------------------------------- mix (ducking), then loudness
         mix = tmp / "mix.wav"
         ins = ["-i", str(tmp / "narr.wav"), "-i", str(tmp / "fx.wav")]
         # The effects bus is ducked under the voice too (gently: ~3-6 dB while someone speaks), and
@@ -384,11 +477,9 @@ def main() -> None:
                   f"[2:a]volume={snd['music_db']}dB[m];"
                   f"[m][n2]sidechaincompress=threshold=0.02:ratio=8:attack=20:release=450:makeup=1[md];"
                   f"[1:a][n3]{fx_duck}[fd];"
-                  f"[n1][md][fd]amix=inputs=3:normalize=0:duration=first,"
-                  f"loudnorm=I=-16:TP=-1.5:LRA=11,aresample={SR}[out]")
+                  f"[n1][md][fd]amix=inputs=3:normalize=0:duration=first[out]")
         else:
-            fc = (f"[0:a]asplit=2[n1][n3];[1:a][n3]{fx_duck}[fd];"
-                  f"[n1][fd]amix=inputs=2:normalize=0:duration=first,loudnorm=I=-16:TP=-1.5:LRA=11,aresample={SR}[out]")
+            fc = f"[0:a]asplit=2[n1][n3];[1:a][n3]{fx_duck}[fd];[n1][fd]amix=inputs=2:normalize=0:duration=first[out]"
         run(["ffmpeg", "-loglevel", "error", "-y", *ins, "-filter_complex", fc, "-map", "[out]",
              "-t", f"{vtotal:.3f}", str(mix)])
 
@@ -399,9 +490,16 @@ def main() -> None:
                 if (tmp / name).exists():
                     shutil.copy2(tmp / name, sd / name)
 
+        # Linear gain to -16 LUFS (what loudnorm's dynamic mode did, minus its 192 kHz pass), and a
+        # look-ahead limiter a little under -1.5 dBTP for any peak the gain pushes too high.
+        lufs, peak = loudness(mix)
+        gain = max(-30.0, min(30.0, -16.0 - lufs)) if lufs is not None else 0.0
+        af = f"volume={gain:.2f}dB"
+        if peak is None or peak + gain > -2.0:
+            af += ",alimiter=limit=0.79:attack=5:release=60:level=false:latency=true"
         final = out / "video.mp4"
         run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(video), "-i", str(mix), "-map", "0:v", "-map", "1:a",
-             "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", str(SR), "-movflags", "+faststart",
+             "-af", af, "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", str(SR), "-movflags", "+faststart",
              "-shortest", str(final)])
 
     # ------------------------------------------------------------------ thumbnail
@@ -418,6 +516,8 @@ def main() -> None:
         at = pick["start"] + float(tp.get("t", pick["duration"] * 0.8))
         run(["ffmpeg", "-loglevel", "error", "-y", "-ss", f"{at:.2f}", "-i", str(out / "video.mp4"),
              "-frames:v", "1", "-vf", "scale=1280:720", "-q:v", "2", str(thumb)])
+    sheet = ws / "frames" / "_final.jpg"
+    final_sheet(out / "video.mp4", thumb, sheet, duration(out / "video.mp4"))
 
     # ------------------------------------------------------------------ manifest + timeline
     manifest = {"title": plan.get("title", "waitwhat"),
@@ -433,7 +533,9 @@ def main() -> None:
 
     v = ffprobe(out / "video.mp4", "stream=codec_name,width,height")
     print(json.dumps({"ok": True, "video": str(out / "video.mp4"), "duration": timeline["total"],
-                      "streams": v.split(), "thumbnail": str(thumb), "manifest": str(out / "manifest.json")}))
+                      "streams": v.split(), "video_mode": video_mode, "loudness_in": lufs, "gain_db": round(gain, 2),
+                      "thumbnail": str(thumb), "manifest": str(out / "manifest.json"),
+                      "final_sheet": str(sheet) if sheet.exists() else None}))
 
 
 if __name__ == "__main__":

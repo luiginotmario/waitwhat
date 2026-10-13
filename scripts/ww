@@ -6,10 +6,13 @@
 #   ww progress stage voice "..."    write .waitwhat/progress.json
 #   ww tts [--scene id] [--force]    narrate scenes (in parallel) → workspace/audio/
 #   ww tts --background | --wait     voice in a detached process / wait for it
-#   ww render <id> --preview         fast 480p15 look → workspace/previews/ + review frames
-#   ww render <id...> | --all [-j N] final 1080p30 → workspace/renders/ (waits for pending audio)
-#   ww stitch                        → out/video.mp4, out/thumbnail.jpg, out/manifest.json
-#   ww fetch <url>                   Jina Reader → workspace/research/*.md
+#   ww brief <id>                    a scene's plan entry + its neighbours' handoffs, theme, palette
+#   ww render <id...> | --all [-j N] final 1080p30 (seconds) → workspace/renders/ + 2x2 sheet, marks progress
+#   ww render <id> --preview         480p15 look → workspace/previews/ (only for heavy scenes)
+#   ww render --check                import shared.py with the toolchain (before fanning out)
+#   ww review                        every scene's first | middle | last frame → frames/_review_<n>.jpg
+#   ww stitch                        → out/video.mp4, out/thumbnail.jpg, out/manifest.json, frames/_final.jpg
+#   ww fetch <url> [<url>...] [--search q]  Jina Reader, in parallel → workspace/research/*.md
 #   ww music bed --mood calm ...     procedural music
 #   ww sfx list                      the sound-effect library (assets/sfx)
 #   ww backdrop "prompt"             optional AI-painted theme backdrop → workspace/backdrop.png
@@ -25,15 +28,17 @@ case "$cmd" in
   new)      exec python3 "$ROOT/scripts/job.py" new "$@" ;;
   refine)   exec python3 "$ROOT/scripts/job.py" refine "$@" ;;
   check)    exec python3 "$ROOT/scripts/job.py" check "$@" ;;
+  brief)    exec python3 "$ROOT/scripts/job.py" brief "$@" ;;
   progress) exec python3 "$ROOT/scripts/progress.py" "$@" ;;
   tts)      exec python3 "$ROOT/scripts/tts.py" "$@" ;;
   fetch)    exec python3 "$ROOT/scripts/fetch.py" "$@" ;;
   render)   py "$ROOT/scripts/render.py" "$@" ;;
+  review)   py "$ROOT/scripts/render.py" --review "$@" ;;
   stitch)   py "$ROOT/scripts/stitch.py" "$@" ;;
   music)    py "$ROOT/scripts/music.py" "$@" ;;
   sfx)      py "$ROOT/scripts/sfx_library.py" "$@" ;;
   backdrop) exec python3 "$ROOT/scripts/backdrop.py" "$@" ;;
   manim)    "$ROOT/scripts/run.sh" manim "$@" ;;
-  help|-h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//' ;;
+  help|-h|--help) sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) echo "ww: unknown command '$cmd' (try: ww help)" >&2; exit 2 ;;
 esac

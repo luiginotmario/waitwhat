@@ -2,8 +2,10 @@
 """Render scenes one file at a time, cache by content hash, and extract review frames.
 
   render.py hook squares            # final 1080p30 renders of these scene ids (workspace/scenes/<id>.py)
-  render.py hook --preview          # fast 480p15 preview for checking frames (≈2-3x faster); --draft = same
+  render.py hook --preview          # fast 480p15 preview (≈2x faster); --draft = same
   render.py --all -j 4              # final renders of every scene in plan.json that changed, 4 at a time
+  render.py --check                 # import workspace/scenes/shared.py (+ the style lib): ok or traceback
+  render.py --review                # one look at the whole video: frames/_review_<n>.jpg, a row per scene
   render.py --stings                # brand intro/outro → workspace/renders/_intro.mp4, _outro.mp4
   render.py --probe 42.5            # what is on screen at 42.5 s of out/video.mp4 (for refine)
 
@@ -11,12 +13,19 @@ Per scene it writes:
   renders/<id>.mp4 + renders/<id>.json   (hash, duration, quality); previews go to previews/ instead,
   renders/<id>.cues.json                 sound-effect cues the scene logged (mixed by stitch.py)
                                          so a preview never replaces a final render
-  frames/<id>_1.jpg … and frames/<id>_sheet.jpg   (look at the sheet! from the latest render, either kind)
+  frames/<id>_1.jpg … and frames/<id>_sheet.jpg   (look at the sheet! from the latest render, either kind:
+                                         a 2x2 grid, in time order: first frame | ~40 %, ~75 % | last frame
+                                         before any fade-out, so the handoffs are on it too)
   logs/<id>.render.log                   (full manim output; on failure the traceback is printed)
   logs/<id>.layout.json                  (written by WaitwhatScene: overlapping / off-frame text)
 
 A scene is skipped when its code, shared code, style lib and narration timing are unchanged, so a
 refine re-renders only what it touched. Exit code 1 if any scene failed.
+
+Progress: a final (non-preview) render marks the scene `rendering` in .waitwhat/progress.json when
+it starts and `done` when it succeeds (--no-progress to skip), so a scene builder never needs a
+separate `ww progress scene` call. Final 1080p renders take seconds, so render the final directly
+and look at its sheet; previews are for heavy scenes only.
 
 Narration timing: while `ww tts` is still voicing a scene (workspace/audio/<id>.pending), rendering
 that scene waits for its audio (up to --wait-audio seconds), so scene code can be written in
@@ -123,30 +132,50 @@ def ffprobe_duration(p: Path) -> float:
         return 0.0
 
 
+def frame_times(dur: float, n: int) -> list[float]:
+    """n review times: the first frame, evenly spread middles, and the last frame before a fade-out
+    (finish(fade=True) fades over the final 0.5 s), so the handoffs to the neighbours are visible."""
+    if dur <= 0:
+        return []
+    if n <= 1:
+        return [round(dur * 0.5, 2)]
+    first, last = min(0.05, dur * 0.1), max(0.0, dur - 0.6) if dur > 1.5 else dur * 0.85
+    mids = [0.4, 0.75] if n == 4 else [0.12 + 0.76 * i / (n - 1) for i in range(1, n - 1)]
+    times = [first] + [dur * f for f in mids] + [last]
+    return sorted(set(round(min(max(t, 0.0), dur - 0.04), 2) for t in times))
+
+
 def extract_frames(ws: Path, sid: str, mp4: Path, n: int, extra: list[float] | None = None) -> tuple[list[str], str]:
-    """Review frames (≤960 px wide) and a vertical contact sheet."""
+    """Review frames (≤960 px wide) and a contact sheet: a 2x2 grid for 4 frames, else a vertical stack."""
     fdir = ws / "frames"
     fdir.mkdir(parents=True, exist_ok=True)
     for old in fdir.glob(f"{sid}_*.jpg"):
         old.unlink()
     dur = ffprobe_duration(mp4)
-    times = [dur * f for f in ([0.5] if n == 1 else [0.12 + 0.76 * i / (n - 1) for i in range(n)])]
-    times = sorted(set(round(t, 2) for t in times + (extra or []) if 0 <= t < dur))
-    frames = []
-    for i, t in enumerate(times, start=1):
+    times = sorted(set(frame_times(dur, n) + [round(t, 2) for t in (extra or []) if 0 <= t < dur]))
+
+    def grab(it: tuple[int, float]) -> str | None:
+        i, t = it
         out = fdir / f"{sid}_{i}.jpg"
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-ss", f"{t:.2f}", "-i", str(mp4),
                         "-frames:v", "1", "-vf", "scale='min(960,iw)':-2", "-q:v", "3", str(out)], check=False)
-        if out.exists():
-            frames.append(str(out))
+        return str(out) if out.exists() else None
+
+    with cf.ThreadPoolExecutor(max_workers=4) as pool:
+        frames = [f for f in pool.map(grab, enumerate(times, start=1)) if f]
     sheet = fdir / f"{sid}_sheet.jpg"
     if frames:
         ins = sum([["-i", f] for f in frames], [])
-        # label each tile with its timestamp is not possible without drawtext everywhere; order = time
-        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", *ins, "-filter_complex",
-                        f"{''.join(f'[{i}]pad=iw:ih+8:0:0:0x333333[p{i}];' for i in range(len(frames)))}"
-                        f"{''.join(f'[p{i}]' for i in range(len(frames)))}vstack=inputs={len(frames)}"
-                        if len(frames) > 1 else "null", "-q:v", "3", str(sheet)], check=False)
+        k = len(frames)
+        pads = "".join(f"[{i}]pad=iw+8:ih+8:0:0:0x333333[p{i}];" for i in range(k))
+        if k == 4:
+            fc = pads + "[p0][p1][p2][p3]xstack=inputs=4:layout=0_0|w0_0|0_h0|w0_h0"
+        elif k > 1:
+            fc = pads + "".join(f"[p{i}]" for i in range(k)) + f"vstack=inputs={k}"
+        else:
+            fc = "null"
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", *ins, "-filter_complex", fc, "-q:v", "3", str(sheet)],
+                       check=False)
     return frames, str(sheet)
 
 
@@ -220,11 +249,117 @@ def summarize_failure(log: str) -> str:
     return "\n".join(tail)
 
 
+def mark_progress(ws: Path, sid: str, status: str) -> None:
+    """Best effort: the scene's status in <job>/.waitwhat/progress.json (only if the job tracks it)."""
+    job = ws.parent
+    if not (job / ".waitwhat" / "progress.json").exists():
+        return
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import progress as _pg  # stdlib-only sibling script (same lock as `ww progress`)
+        with _pg.locked(job):
+            data = _pg.load(job)
+            hit = next((sc for sc in data.get("scenes", []) if sc.get("id") == sid), None)
+            if hit is None or hit.get("status") == status:
+                return
+            hit["status"] = status
+            _pg.refresh_outline(data)
+            _pg.save(job, data)
+    except Exception as e:  # progress is cosmetic; never fail a render over it
+        print(f"render: could not update progress for '{sid}': {e}", file=sys.stderr)
+
+
+def check_shared(ws: Path) -> dict:
+    """Import workspace/scenes/shared*.py with the toolchain, before scene builders rely on it."""
+    files = sorted((ws / "scenes").glob("shared*.py"))
+    if not files:
+        return {"ok": True, "checked": [], "note": "no shared.py"}
+    code = "import importlib, sys\nfor m in sys.argv[1:]:\n    importlib.import_module(m)\n"
+    t0 = time.time()
+    proc = subprocess.run([str(VENV_BIN / "python"), "-c", code, *[f.stem for f in files]], cwd=ws / "scenes",
+                          env=toolchain_env(ws), capture_output=True, text=True)
+    res = {"ok": proc.returncode == 0, "checked": [f.name for f in files], "seconds": round(time.time() - t0, 1)}
+    if proc.returncode != 0:
+        res["error"] = summarize_failure(proc.stdout + "\n" + proc.stderr)
+    return res
+
+
+def review_sheets(ws: Path, per_image: int = 6) -> dict:
+    """The whole video at a glance, for the director's one review turn: frames/_review_<n>.jpg, one row
+    per scene in plan order (first frame | middle | last frame before any fade-out), from the final
+    render (else the preview). The end of row k next to the start of row k+1 is the handoff."""
+    plan = json.loads((ws / "plan.json").read_text())
+    ids = [s["id"] for s in plan.get("scenes", [])]
+    fdir = ws / "frames"
+    fdir.mkdir(parents=True, exist_ok=True)
+    for old in fdir.glob("_review_*.jpg"):
+        old.unlink()
+    tw, th = 448, 252
+    srcs: dict[str, Path] = {}
+    missing = []
+    for sid in ids:
+        for d in ("renders", "previews"):
+            if (ws / d / f"{sid}.mp4").exists():
+                srcs[sid] = ws / d / f"{sid}.mp4"
+                break
+        else:
+            missing.append(sid)
+    tmp = fdir / ".review"
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir()
+
+    def grab(job: tuple[str, int, float]) -> None:
+        sid, j, t = job
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-ss", f"{t:.2f}", "-i", str(srcs[sid]), "-frames:v", "1",
+                        "-vf", f"scale={tw}:{th}:force_original_aspect_ratio=decrease,pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2",
+                        str(tmp / f"{sid}_{j}.png")], check=False)
+
+    jobs = []
+    for sid, src in srcs.items():
+        dur = ffprobe_duration(src)
+        ts = frame_times(dur, 3)
+        if len(ts) == 3:
+            ts = [ts[0], dur * 0.5, ts[2]]
+        jobs += [(sid, j, t) for j, t in enumerate(ts)]
+    with cf.ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(grab, jobs))
+    rows = [sid for sid in ids if sid in srcs and all((tmp / f"{sid}_{j}.png").exists() for j in range(3))]
+    images = []
+    for n, k0 in enumerate(range(0, len(rows), per_image), start=1):
+        chunk = rows[k0:k0 + per_image]
+        ins = sum([["-i", str(tmp / f"{sid}_{j}.png")] for sid in chunk for j in range(3)], [])
+        m = len(chunk) * 3
+        pads = "".join(f"[{i}]pad=iw+6:ih+6:0:0:0x444444[p{i}];" for i in range(m))
+        layout = "|".join(f"{c * (tw + 6)}_{r * (th + 6)}" for r in range(len(chunk)) for c in range(3))
+        out = fdir / f"_review_{n}.jpg"
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", *ins, "-filter_complex",
+                        pads + "".join(f"[p{i}]" for i in range(m)) + f"xstack=inputs={m}:layout={layout}",
+                        "-q:v", "3", str(out)], check=False)
+        if out.exists():
+            images.append({"image": str(out), "rows": chunk})
+    shutil.rmtree(tmp, ignore_errors=True)
+    res = {"ok": bool(images), "images": images,
+           "layout": "one row per scene, top to bottom in plan order: first frame | middle | last frame"}
+    if missing:
+        res["not_rendered"] = missing
+    return res
+
+
 def render_one(ws: Path, sid: str, quality: str, fps: int, force: bool, nframes: int,
-               preview: bool = False, wait_audio: float = 600) -> dict:
+               preview: bool = False, wait_audio: float = 600, progress: bool = True) -> dict:
+    res = _render_one(ws, sid, quality, fps, force, nframes, preview, wait_audio, progress)
+    if progress and not preview and res.get("ok"):
+        mark_progress(ws, sid, "done")
+    return res
+
+
+def _render_one(ws: Path, sid: str, quality: str, fps: int, force: bool, nframes: int,
+                preview: bool, wait_audio: float, progress: bool) -> dict:
     src = ws / "scenes" / f"{sid}.py"
     if not src.exists():
         return {"id": sid, "ok": False, "error": f"missing {src}"}
+    if progress and not preview:
+        mark_progress(ws, sid, "rendering")
     waited = wait_for_audio(ws, sid, wait_audio) if wait_audio > 0 else 0.0
     note = audio_note(ws, sid)
     h = content_hash(ws, sid, quality, fps)
@@ -366,7 +501,10 @@ def main() -> None:
     ap.add_argument("--quality", choices=list(QUALITY), default="h")
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--force", action="store_true")
-    ap.add_argument("--frames", type=int, default=3, help="review frames per scene (0 = none)")
+    ap.add_argument("--frames", type=int, default=4, help="review frames per scene (0 = none; 4 = the 2x2 sheet)")
+    ap.add_argument("--no-progress", action="store_true", help="don't touch .waitwhat/progress.json")
+    ap.add_argument("--check", action="store_true", help="import shared.py with the toolchain and report")
+    ap.add_argument("--review", action="store_true", help="frames/_review_<n>.jpg: a row of frames per scene")
     ap.add_argument("-j", "--jobs", type=int, default=default_jobs(),
                     help="scenes rendered in parallel (default WAITWHAT_RENDER_JOBS, else max(2, cores-2))")
     ap.add_argument("--wait-audio", type=float, default=600, metavar="SECONDS",
@@ -380,6 +518,16 @@ def main() -> None:
     if a.probe is not None:
         print(json.dumps(probe(ws, a.probe), indent=1))
         return
+    if a.check:
+        r = check_shared(ws)
+        print(json.dumps(r))
+        if not r["ok"]:
+            sys.exit(1)
+        if not a.ids and not a.all:
+            return
+    if a.review:
+        print(json.dumps(review_sheets(ws)))
+        return
     if a.stings:
         print(json.dumps(render_stings(ws)))
         if not a.ids and not a.all:
@@ -389,12 +537,13 @@ def main() -> None:
         plan = json.loads((ws / "plan.json").read_text())
         ids = [s["id"] for s in plan.get("scenes", [])]
     if not ids:
-        ap.error("give scene ids, --all, --stings or --probe")
+        ap.error("give scene ids, --all, --check, --review, --stings or --probe")
     quality = "l" if a.preview else a.quality
     fps = 15 if a.preview and a.fps == 30 else a.fps
     failed = False
     with cf.ThreadPoolExecutor(max_workers=max(1, min(a.jobs, len(ids)))) as pool:
-        futs = {pool.submit(render_one, ws, sid, quality, fps, a.force, a.frames, a.preview, a.wait_audio): sid
+        futs = {pool.submit(render_one, ws, sid, quality, fps, a.force, a.frames, a.preview, a.wait_audio,
+                            not a.no_progress): sid
                 for sid in ids}
         for fut in cf.as_completed(futs):
             r = fut.result()

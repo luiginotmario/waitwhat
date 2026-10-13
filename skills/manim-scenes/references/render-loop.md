@@ -3,12 +3,17 @@
 The frames-first verification loop is adapted from iart-ai/manim-skills (MIT). See THIRD_PARTY.md.
 
 ## Commands
-- `ww render <id> --preview`: 480p15 into `workspace/previews/`, about 2-3x faster than the
-  final. Use it for every look while iterating.
 - `ww render <id> [<id>…]` renders the final 1080p30 into `workspace/renders/` (what `ww stitch`
-  uses); it skips scenes whose code, shared code, style lib and narration timing are unchanged.
-  `--force` to re-render anyway, `--all` for every scene in the plan, `-j N` scenes in parallel
-  (default `WAITWHAT_RENDER_JOBS`, else cores − 2).
+  uses), typically in 3–7 s, so render the final directly and look at it. It skips scenes whose
+  code, shared code, style lib and narration timing are unchanged, and marks each scene
+  `rendering` → `done` in the job's progress (`--no-progress` to skip). `--force` to re-render
+  anyway, `--all` for every scene in the plan, `-j N` scenes in parallel (default
+  `WAITWHAT_RENDER_JOBS`, else cores − 2).
+- `ww render <id> --preview`: 480p15 into `workspace/previews/`, about 2x faster than the final;
+  only worth it for very heavy scenes. Previews never touch progress or the stitch.
+- `ww render --check` imports `workspace/scenes/shared.py` with the toolchain (≈1 s).
+- `ww review` (the director, after all scenes): `workspace/frames/_review_<n>.jpg`, one row per
+  scene in plan order (first | middle | last frame), up to 6 rows per image.
 - If `ww tts` is still voicing the scene, render waits for its audio (`--wait-audio 0` to skip).
 - Output per scene (one JSON line): `ok`, `duration`, `layout_issues`, `missing_marks`,
   `warning` (e.g. video shorter than narration, timing estimated because there is no audio yet,
@@ -26,7 +31,8 @@ The frames-first verification loop is adapted from iart-ai/manim-skills (MIT). S
    frame as PNG, in a second or two.
 
 ## Visual check (always, after every successful render)
-Open the sheet (`Read workspace/frames/<id>_sheet.jpg`); individual frames are next to it. For
+Open the sheet (`Read workspace/frames/<id>_sheet.jpg`: a 2x2 grid in time order, first frame,
+~40 %, ~75 %, last frame before any fade-out); individual frames are next to it. For
 moments that matter (the aha), extract an exact frame:
 `ffmpeg -ss 7.5 -i workspace/renders/<id>.mp4 -frames:v 1 /tmp/f.png`.
 

@@ -19,9 +19,17 @@ the job contract, the subagent flow) are already in your system prompt, as the w
 preloads them, don't invoke or re-read them: start working. Read other references only when
 the step that needs them comes up.
 
-**Pace.** Wall-clock time matters as much as cost. Batch independent tool calls into one
-message (parallel Reads, a Write plus a progress update), write `plan.json` in one go rather
-than in many small edits, and let the subagents and background jobs below do the waiting.
+**Pace.** The person is waiting: wall-clock time matters as much as cost, and almost all of it
+is model turns (a 1080p scene renders in seconds, the voice in ~25 s in the background, stitching
+in ~10 s). Every turn you take is on the critical path, and so is every token you write. So:
+- Batch independent tool calls into one message (parallel Reads, a Write plus a Bash).
+- Write `plan.json` in ONE Write with everything in it (scenes, narration, per-scene direction);
+  never build it with a string of Edits.
+- Write each thing once: what a scene builder needs goes in its `plan.json` entry, and the Agent
+  brief only points at it (references/subagents.md). Don't restate the plan in briefs.
+- Research is bounded (step 3). No test renders, no reading the style lib's source, no
+  `ww help`: everything you need is in your context.
+- The finish is two turns (step 7), and the final reply is a few lines.
 
 ## 1. Find the job
 
@@ -93,6 +101,15 @@ For attachments, read them fully first (PDFs and images with Read). For company 
 topic where facts matter, load `waitwhat:research`. Never invent facts, numbers, quotes or
 customers; if you cannot verify something, leave it out.
 
+**Research is bounded.** `request.research` (when present) lists pages the web app already
+fetched while planning, saved in `workspace/research/`: use them, don't fetch them again. Then
+at most two rounds: ONE `ww fetch URL URL ... [--search "..."]` call with every page you need (they
+download in parallel; `--search` only works when `JINA_API_KEY` is set), then ONE Bash that pulls
+the relevant passages out of all of them (a `grep -n -i -E` over the files, or `sed -n` ranges),
+and only if a needed fact is still missing, one more targeted round. Write `research/notes.md`
+in the same message as `plan.json`. For timeless topics (math, classic physics, how the calendar
+works) your own knowledge plus one reference page is enough.
+
 ## 4. Plan the story, then the pictures
 
 Load `waitwhat:storytelling` and write the scene plan from the outline: walk the outline in
@@ -101,8 +118,11 @@ a single short scene). When the subject has a real story (a company, a discovery
 a historical turn), tell it as one: a real protagonist with a problem, what was at stake, the
 turning point, then the idea, all from verified sources.
 
-Each scene has one job, a narration draft, a storyboard line, its concept colours, how it hands
-off to the next scene, and `covers`: the 1-based outline items it serves.
+Each scene has one job, its narration, a storyboard (`visual`: what appears, where, on which word;
+concrete enough for a builder to draw it), how it hands off to the next scene, `covers` (the
+1-based outline items it serves), and `build`: the builder's notes in a line or two (the
+`shared.py` objects it uses, what is on screen at its start and end, the 1–3 beats, the chosen
+sound moments, anything tricky). The scene builder works from this entry alone.
 Every outline item must be covered by at least one scene; `ww progress plan` warns about any that
 aren't. Give every scene an `energy` (`high`, `medium`, `low`, `reveal`, `close`) so the video has
 an arc instead of one flat level: a bright hook, steady build-up, a hush before the insight, a
@@ -136,20 +156,19 @@ objects in `workspace/scenes/shared.py`.
 
 **For any video with 3 or more scenes, scenes are built by parallel subagents: this is the
 default flow, not a suggestion.** Follow `references/subagents.md`:
-1. Finish `plan.json` and `shared.py` (the style reference; no reference render first), then
-   `ww progress plan`.
-2. `ww tts --background`, then, in the same turn or the next, launch one `scene-builder`
-   subagent per scene as several Agent tool calls in ONE message (at most
-   `WAITWHAT_RENDER_JOBS` at once; more scenes go in batches, in outline order).
-3. Each subagent writes its scene, previews it fast (`ww render <id> --preview`, 480p15),
-   checks the frames, fixes (max 3 tries), renders the final 1080p30 once, marks its progress,
-   and replies in a line or two.
-4. You review every contact sheet in one turn and send back only the fixes that matter.
-   Consistency across scenes is your job; the subagents keep render logs and tracebacks out of
-   your context.
+1. One message: Write `plan.json` (every scene's narration, `visual`, `build` notes; see the job
+   contract) + Write `shared.py` (the style reference; no reference render) + one Bash:
+   `ww render --check && ww progress plan && ww tts --background && ww progress stage animating "…"`.
+2. Next message: one `scene-builder` Agent call per scene, all in that ONE message (at most
+   `WAITWHAT_RENDER_JOBS` at once; more scenes go in batches, in outline order). Each brief is
+   three lines; the scene's `plan.json` entry is the real brief.
+3. Each subagent writes its scene, renders the final 1080p (seconds), looks at its 2x2 sheet,
+   fixes only real problems, and replies in a line or two. Progress updates itself.
+4. You review the whole video in ONE turn (`ww tts --wait && ww review`, then Read the
+   `_review_*.jpg` images) and send back only the fixes that matter, in parallel.
 
 Fallback: with no Agent/Task tool, or 1–2 scenes, run the same loop yourself scene by scene
-(still `--preview` for every look, one final render per scene).
+(write → `ww render <id>` → look at the sheet → fix only if needed).
 
 ### Long videos (roughly 10+ scenes)
 
@@ -157,25 +176,29 @@ Length is not a reason to cut corners, but your own context is finite, so delega
 - Plan, narrate and start the voice for the whole video first (`ww tts --background` voices
   every scene).
 - Hand every scene to a subagent, batch by batch in outline order. Keep your own context for
-  direction and review: look at contact sheets, not render logs.
+  direction and review: look at the `ww review` images, not render logs.
 - Keep `shared.py` and the palette stable once the fan-out starts; if you must change them,
   re-render the scenes that import what changed.
 - `ww render --all` and `ww stitch` take longer on long videos: give those Bash calls the
   maximum timeout, or run them in the background and poll.
-- Progress is per scene (the subagents report it), so a long render never looks stuck.
+- Progress is per scene (each final render reports it), so a long render never looks stuck.
 
-## 7. Sound, stitch, check
+## 7. Sound, stitch, check (two turns)
 
-Load `waitwhat:sound` for the music mood and effects (usually just `plan.sound`; the scenes
-log their own sound cues, and each brief names the few moments that deserve a chosen sound). Then
-`ww stitch` → `out/`. Watch for problems: extract a few frames across the final video, check the
-thumbnail, and run `ww check`. Then `ww progress stage done "Your video is ready"`.
+Load `waitwhat:sound` for the music mood and effects (usually just `plan.sound`, already in
+plan.json; the scenes log their own sound cues). Then:
+1. One Bash: `ww stitch && ww check; echo "v1 $(date +%F): <one line>" >> workspace/versions.md`
+   (`ww check` only complains that the stage is not `done` yet; that is expected here).
+2. One message: Read `workspace/frames/_final.jpg` (frames across the finished video plus the
+   thumbnail) and, in the same message, Bash `ww progress stage done "Your video is ready"`. If
+   the look shows a real problem (a black or broken frame, a wrong scene order, a bad
+   thumbnail), fix it, stitch again, and set done again.
 
 ## 8. Finish
 
-Reply briefly: the title, length, what the video covers, and the path to `out/video.mp4`
-(local runs: also `open` it). Mention anything you could not verify or had to simplify, any
-outline item you dropped and why, and (free previews) what was deferred.
+Reply in a few short lines: the title, the length, what it covers, and the path to
+`out/video.mp4` (local runs: also `open` it). Mention anything you could not verify or had to
+simplify, any outline item you dropped and why, and (free previews) what was deferred.
 
 ## Judgment calls
 

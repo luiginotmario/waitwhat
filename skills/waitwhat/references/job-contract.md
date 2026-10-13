@@ -5,7 +5,7 @@ they create a job dir and run the agent with that dir as cwd.
 
 ```
 <job>/
-  request.json              {prompt, attachments:[{path,name,mime}], plan?, answers?, refine?:{text, at_seconds, frame_path}}
+  request.json              {prompt, attachments:[{path,name,mime}], plan?, answers?, research?, refine?:{text, at_seconds, frame_path}}
   inputs/                   downloaded attachments (+ the refine frame png)
   workspace/                previous version's workspace when refining; otherwise empty
   .waitwhat/progress.json   written ONLY via `ww progress …`; the worker polls it
@@ -20,6 +20,10 @@ they create a job dir and run the agent with that dir as cwd.
   question?, asked?:[string], note?, deferred?:[string]}`. `request.answers` (optional) holds the
   person's answers to clarifying questions: `[{id, q, a}]` (`a` null when skipped). The outline is
   the checklist the video must cover; see the `waitwhat` skill.
+- `request.research` (optional): pages the web planner already fetched for this request (the URLs
+  in the prompt), saved before the run as `workspace/research/<slug>.md` with the usual source
+  header: `[{url, path, chars}]` (`path` relative to the job dir). Use them; don't fetch them again
+  (`ww fetch` skips pages that are already saved).
 - After success the worker tars `workspace/` (it becomes the starting point of the next refine)
   and uploads `out/*`. Keep `workspace/` self-contained and reasonably small: no Manim media
   caches (render.py deletes them), no copies of `out/`.
@@ -53,7 +57,8 @@ workspace/
   renders/<id>.mp4|json  final 1080p30 scene renders + content hash (ww render)
   renders/<id>.cues.json sound-effect cues the scene logged ({t, name, gain, dur?, auto?}), mixed by ww stitch
   previews/<id>.mp4|json  fast 480p15 previews (ww render --preview); never stitched
-  frames/<id>_*.jpg    review frames + <id>_sheet.jpg contact sheet
+  frames/<id>_*.jpg    review frames + <id>_sheet.jpg (2x2: first, ~40 %, ~75 %, last frame)
+  frames/_review_*.jpg ww review: a row per scene (first | middle | last); frames/_final.jpg: ww stitch
   logs/                render logs, layout lint, probes, sfx.json (effects placed/dropped by stitch)
   timeline.json        final segment times (ww stitch), used by refine
   thumbnail.png        optional custom thumbnail (a rendered still)
@@ -94,6 +99,7 @@ workspace/
       "goal": "Make the viewer want to know why a² + b² = c² could possibly be true.",
       "narration": "Take any right triangle … <bookmark mark=\"squares\"/> build a square on each side …",
       "visual": "Right triangle fades up; three squares grow off its sides in their concept colours …",
+      "build": "shared.make_triangle(), centred; ends on triangle + 3 squares (next scene continues). Beats: squares, compare. pop on each square; chime@compare.",  // the builder's notes
       "covers": [1],                     // 1-based outline items this scene serves (every item needs at least one scene)
       "transition": "cut",               // how THIS scene is entered: continuous (starts on the previous scene's last frame, no whoosh) | cut
       "energy": "high",                  // delivery + tempo: high | medium | low | reveal | close (optional, default medium)
