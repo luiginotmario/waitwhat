@@ -4,8 +4,10 @@
 #   ww setup                         install/repair the toolchain (idempotent)
 #   ww new "prompt" [--attach f]     create ./waitwhat-videos/<slug>/ job dir
 #   ww progress stage voice "..."    write .waitwhat/progress.json
-#   ww tts [--scene id] [--force]    narrate scenes → workspace/audio/
-#   ww render <id...> | --all        render scenes → workspace/renders/ + review frames
+#   ww tts [--scene id] [--force]    narrate scenes (in parallel) → workspace/audio/
+#   ww tts --background | --wait     voice in a detached process / wait for it
+#   ww render <id> --preview         fast 480p15 look → workspace/previews/ + review frames
+#   ww render <id...> | --all [-j N] final 1080p30 → workspace/renders/ (waits for pending audio)
 #   ww stitch                        → out/video.mp4, out/thumbnail.jpg, out/manifest.json
 #   ww fetch <url>                   Jina Reader → workspace/research/*.md
 #   ww music bed --mood calm ...     procedural music / sfx

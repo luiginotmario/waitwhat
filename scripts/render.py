@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
 """Render scenes one file at a time, cache by content hash, and extract review frames.
 
-  render.py hook squares            # render these scene ids (workspace/scenes/<id>.py)
-  render.py --all -j 3              # every scene in plan.json that changed, 3 at a time
-  render.py hook --draft            # 480p for a fast look; final renders are 1080p30
+  render.py hook squares            # final 1080p30 renders of these scene ids (workspace/scenes/<id>.py)
+  render.py hook --preview          # fast 480p15 preview for checking frames (≈2-3x faster); --draft = same
+  render.py --all -j 4              # final renders of every scene in plan.json that changed, 4 at a time
   render.py --stings                # brand intro/outro → workspace/renders/_intro.mp4, _outro.mp4
   render.py --probe 42.5            # what is on screen at 42.5 s of out/video.mp4 (for refine)
 
 Per scene it writes:
-  renders/<id>.mp4 + renders/<id>.json   (hash, duration, quality)
-  frames/<id>_1.jpg … and frames/<id>_sheet.jpg   (look at the sheet!)
+  renders/<id>.mp4 + renders/<id>.json   (hash, duration, quality); previews go to previews/ instead,
+                                         so a preview never replaces a final render
+  frames/<id>_1.jpg … and frames/<id>_sheet.jpg   (look at the sheet! from the latest render, either kind)
   logs/<id>.render.log                   (full manim output; on failure the traceback is printed)
   logs/<id>.layout.json                  (written by WaitwhatScene: overlapping / off-frame text)
 
 A scene is skipped when its code, shared code, style lib and narration timing are unchanged, so a
 refine re-renders only what it touched. Exit code 1 if any scene failed.
+
+Narration timing: while `ww tts` is still voicing a scene (workspace/audio/<id>.pending), rendering
+that scene waits for its audio (up to --wait-audio seconds), so scene code can be written in
+parallel with the voice. Without audio the lib estimates timings from the plan's narration (fine
+for a preview, never for a final render: the result carries a warning).
+-j defaults to WAITWHAT_RENDER_JOBS, else max(2, cores - 2).
 Stdlib only; it finds manim in the plugin's .venv.
 """
 from __future__ import annotations
@@ -113,6 +120,7 @@ def ffprobe_duration(p: Path) -> float:
 
 
 def extract_frames(ws: Path, sid: str, mp4: Path, n: int, extra: list[float] | None = None) -> tuple[list[str], str]:
+    """Review frames (≤960 px wide) and a vertical contact sheet."""
     fdir = ws / "frames"
     fdir.mkdir(parents=True, exist_ok=True)
     for old in fdir.glob(f"{sid}_*.jpg"):
@@ -124,7 +132,7 @@ def extract_frames(ws: Path, sid: str, mp4: Path, n: int, extra: list[float] | N
     for i, t in enumerate(times, start=1):
         out = fdir / f"{sid}_{i}.jpg"
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-ss", f"{t:.2f}", "-i", str(mp4),
-                        "-frames:v", "1", "-vf", "scale=960:-2", "-q:v", "3", str(out)], check=False)
+                        "-frames:v", "1", "-vf", "scale='min(960,iw)':-2", "-q:v", "3", str(out)], check=False)
         if out.exists():
             frames.append(str(out))
     sheet = fdir / f"{sid}_sheet.jpg"
@@ -138,6 +146,67 @@ def extract_frames(ws: Path, sid: str, mp4: Path, n: int, extra: list[float] | N
     return frames, str(sheet)
 
 
+def default_jobs() -> int:
+    try:
+        n = int(os.environ.get("WAITWHAT_RENDER_JOBS", "") or 0)
+    except ValueError:
+        n = 0
+    return n if n > 0 else max(2, (os.cpu_count() or 4) - 2)
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return pid > 0
+
+
+def wait_for_audio(ws: Path, sid: str, timeout: float) -> float:
+    """Wait while `ww tts` is voicing this scene (audio/<id>.pending holds a live pid). → seconds waited."""
+    m = ws / "audio" / f"{sid}.pending"
+    t0 = time.time()
+    said = False
+    while m.exists() and time.time() - t0 < timeout:
+        try:
+            if not _pid_alive(int(m.read_text().strip() or 0)):
+                break
+        except (ValueError, OSError):
+            break
+        if not said:
+            print(f"render: waiting for the narration audio of '{sid}' (ww tts is voicing it)…", file=sys.stderr, flush=True)
+            said = True
+        time.sleep(0.5)
+    return round(time.time() - t0, 1)
+
+
+_TAGS = re.compile(r"<\s*(bookmark|break)\b[^>]*/\s*>", re.I)
+
+
+def audio_note(ws: Path, sid: str) -> str | None:
+    """A warning when the scene's narration timing is missing or older than its narration."""
+    try:
+        plan = json.loads((ws / "plan.json").read_text())
+        sc = next((x for x in plan.get("scenes", []) if x.get("id") == sid), None)
+    except Exception:
+        return None
+    if sc is None or not (sc.get("narration") or "").strip():
+        return None
+    af = ws / "audio" / f"{sid}.json"
+    if not af.exists():
+        return "no narration audio yet: timing is ESTIMATED from the plan. Run `ww tts`, then re-render before the final cut"
+    try:
+        said = json.loads(af.read_text()).get("text", "")
+    except Exception:
+        return "unreadable narration timing file"
+    want = re.sub(r"\s+", " ", _TAGS.sub(" ", sc["narration"])).strip()
+    if said and said != want:
+        return "the narration in plan.json changed since this audio was voiced: run `ww tts --scene " + sid + "`"
+    return None
+
+
 def summarize_failure(log: str) -> str:
     text = ANSI.sub("", log)
     lines = [re.sub(r"[│╭╮╰╯─━┃]+", " ", l).rstrip() for l in text.splitlines()]
@@ -147,16 +216,25 @@ def summarize_failure(log: str) -> str:
     return "\n".join(tail)
 
 
-def render_one(ws: Path, sid: str, quality: str, fps: int, force: bool, nframes: int) -> dict:
+def render_one(ws: Path, sid: str, quality: str, fps: int, force: bool, nframes: int,
+               preview: bool = False, wait_audio: float = 600) -> dict:
     src = ws / "scenes" / f"{sid}.py"
     if not src.exists():
         return {"id": sid, "ok": False, "error": f"missing {src}"}
+    waited = wait_for_audio(ws, sid, wait_audio) if wait_audio > 0 else 0.0
+    note = audio_note(ws, sid)
     h = content_hash(ws, sid, quality, fps)
-    meta_f, mp4_out = ws / "renders" / f"{sid}.json", ws / "renders" / f"{sid}.mp4"
+    out_dir = ws / ("previews" if preview else "renders")
+    meta_f, mp4_out = out_dir / f"{sid}.json", out_dir / f"{sid}.mp4"
     if not force and meta_f.exists() and mp4_out.exists():
         try:
             if json.loads(meta_f.read_text()).get("hash") == h:
-                return {"id": sid, "ok": True, "skipped": True, "duration": ffprobe_duration(mp4_out)}
+                res = {"id": sid, "ok": True, "skipped": True, "duration": ffprobe_duration(mp4_out)}
+                if preview:
+                    res["preview"] = True
+                if note:
+                    res["warning"] = note
+                return res
         except Exception:
             pass
     cls = scene_class(src)
@@ -179,13 +257,17 @@ def render_one(ws: Path, sid: str, quality: str, fps: int, force: bool, nframes:
             if bang:
                 err += "\n\nLaTeX says:\n" + "\n".join(lines[bang[0]:bang[0] + 4])
         return {"id": sid, "ok": False, "seconds": round(time.time() - t0, 1), "error": err}
-    (ws / "renders").mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(produced[-1], mp4_out)
     shutil.rmtree(media, ignore_errors=True)
     dur = ffprobe_duration(mp4_out)
     meta_f.write_text(json.dumps({"hash": h, "duration": dur, "quality": quality, "fps": fps,
                                   "class": cls, "rendered_at": time.strftime("%Y-%m-%dT%H:%M:%S")}, indent=1))
     res = {"id": sid, "ok": True, "seconds": round(time.time() - t0, 1), "duration": round(dur, 2)}
+    if preview:
+        res["preview"] = True
+    if waited >= 1:
+        res["waited_for_audio"] = waited
     lay = ws / "logs" / f"{sid}.layout.json"
     if lay.exists():
         try:
@@ -197,6 +279,8 @@ def render_one(ws: Path, sid: str, quality: str, fps: int, force: bool, nframes:
                 res["warning"] = f"video ({dur:.1f}s) is shorter than its narration ({L['narration_end']:.1f}s); call self.finish()"
         except Exception:
             pass
+    if note:
+        res["warning"] = f"{res['warning']}; {note}" if res.get("warning") else note
     if nframes:
         frames, sheet = extract_frames(ws, sid, mp4_out, nframes)
         res["sheet"] = sheet
@@ -261,12 +345,16 @@ def main() -> None:
     ap.add_argument("ids", nargs="*")
     ap.add_argument("--ws", default="workspace")
     ap.add_argument("--all", action="store_true")
-    ap.add_argument("--draft", action="store_true", help="480p (quality l)")
+    ap.add_argument("--preview", "--draft", dest="preview", action="store_true",
+                    help="fast 480p15 preview into previews/ (frames + sheet as usual); final renders stay 1080p30")
     ap.add_argument("--quality", choices=list(QUALITY), default="h")
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--frames", type=int, default=3, help="review frames per scene (0 = none)")
-    ap.add_argument("-j", "--jobs", type=int, default=max(1, min(4, (os.cpu_count() or 2) // 2)))
+    ap.add_argument("-j", "--jobs", type=int, default=default_jobs(),
+                    help="scenes rendered in parallel (default WAITWHAT_RENDER_JOBS, else max(2, cores-2))")
+    ap.add_argument("--wait-audio", type=float, default=600, metavar="SECONDS",
+                    help="max wait for a scene's audio while ww tts voices it (0 = don't wait)")
     ap.add_argument("--stings", action="store_true")
     ap.add_argument("--probe", type=float, metavar="SECONDS")
     a = ap.parse_args()
@@ -286,10 +374,12 @@ def main() -> None:
         ids = [s["id"] for s in plan.get("scenes", [])]
     if not ids:
         ap.error("give scene ids, --all, --stings or --probe")
-    quality = "l" if a.draft else a.quality
+    quality = "l" if a.preview else a.quality
+    fps = 15 if a.preview and a.fps == 30 else a.fps
     failed = False
-    with cf.ThreadPoolExecutor(max_workers=a.jobs) as pool:
-        futs = {pool.submit(render_one, ws, sid, quality, a.fps, a.force, a.frames): sid for sid in ids}
+    with cf.ThreadPoolExecutor(max_workers=max(1, min(a.jobs, len(ids)))) as pool:
+        futs = {pool.submit(render_one, ws, sid, quality, fps, a.force, a.frames, a.preview, a.wait_audio): sid
+                for sid in ids}
         for fut in cf.as_completed(futs):
             r = fut.result()
             failed |= not r["ok"]

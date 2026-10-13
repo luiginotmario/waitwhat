@@ -50,7 +50,8 @@ workspace/
   scenes/<id>.py       one WaitwhatScene per file; file stem = scene id
   scenes/shared.py     objects/constructors reused across scenes (continuity)
   audio/<id>.wav|json  narration + word timings + bookmark times (ww tts)
-  renders/<id>.mp4|json  rendered scenes + content hash (ww render)
+  renders/<id>.mp4|json  final 1080p30 scene renders + content hash (ww render)
+  previews/<id>.mp4|json  fast 480p15 previews (ww render --preview); never stitched
   frames/<id>_*.jpg    review frames + <id>_sheet.jpg contact sheet
   logs/                render logs, layout lint, probes
   timeline.json        final segment times (ww stitch), used by refine

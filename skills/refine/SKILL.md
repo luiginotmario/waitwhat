@@ -51,8 +51,11 @@ if the video grows (the worker sizes its time limit from it).
   (`squares-why`), and keep the palette (new concepts get new colours, old ones keep theirs).
 - Write the new narration so it flows from the previous scene's last sentence and into the next
   scene's first one. Read the three in sequence.
-- `ww progress plan` (scene list changed), `ww tts` (only changed narration is re-voiced, with
-  the same voice as before), then write/modify scene files and `ww render <ids>`.
+- `ww progress plan` (scene list changed), `ww tts --background` (only changed narration is
+  re-voiced, with the same voice as before; renders of those scenes wait for their new audio),
+  then write/modify scene files: preview with `ww render <id> --preview`, final with
+  `ww render <ids>`. When 3 or more scenes are new or changed, hand them to parallel
+  `scene-builder` subagents exactly as in the waitwhat skill's `references/subagents.md`.
 - Continuity: an inserted scene starts from the previous scene's end state and ends in the next
   scene's start state (use `shared.py`), or set `"transition": "cut"` on both sides deliberately.
   If you changed a scene's end state, re-render the next scene too.

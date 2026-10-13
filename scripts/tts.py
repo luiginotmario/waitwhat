@@ -38,9 +38,18 @@ transcription) is added to <job>/.waitwhat/usage.json:
   {"openrouter_audio_cost_usd", "tts_characters", "stt_seconds", "tts_model", "voice",
    "elevenlabs_characters" (legacy, = tts_characters)}
 
+Concurrency: scenes are voiced in parallel (speech + transcription + alignment per scene), by a
+pool of --jobs threads (default WAITWHAT_TTS_JOBS, else 5; OpenRouter 429/5xx are retried with
+exponential backoff and Retry-After). Each scene writes only its own files; the json lands
+atomically after its wav. While a scene is being voiced, workspace/audio/<id>.pending holds the
+voicing process's pid: `ww render` waits for it, so scene code can be written before the audio
+exists. usage.json is updated under a file lock, so concurrent `ww tts` runs add up correctly.
+
 Usage:
   tts.py                         # all scenes whose narration or voice changed (cache by sha)
   tts.py --scene hook --scene aha --force
+  tts.py --background            # mark the scenes pending, voice them in a detached process, return now
+  tts.py --wait                  # block until a background run finishes; print its log; its exit code
   tts.py --backend say
   tts.py --voices                # list voices and models (no characters spent)
 """
@@ -48,7 +57,9 @@ from __future__ import annotations
 
 import argparse
 import base64
+import concurrent.futures as cf
 import difflib
+import fcntl
 import hashlib
 import json
 import os
@@ -56,7 +67,9 @@ import re
 import shutil
 import subprocess
 import sys
+import random
 import tempfile
+import threading
 import time
 import unicodedata
 import urllib.error
@@ -297,12 +310,14 @@ def tighten(wav: Path, items: list[tuple], words: list[dict], max_pause: float,
 # --------------------------------------------------------------------------- http
 
 def http(method: str, url: str, headers: dict, body: bytes | None = None, timeout: int = 180,
-         label: str = "", tries: int = 3) -> tuple[int, dict, bytes]:
-    """Request with retry on transient failures. Returns (status, headers, body); raises SystemExit
-    with the API's error message (never the key) on a permanent error."""
+         label: str = "", tries: int = 6) -> tuple[int, dict, bytes]:
+    """Request with retry on transient failures (429, 5xx, network): exponential backoff with
+    jitter, honouring Retry-After. Returns (status, headers, body); raises SystemExit with the
+    API's error message (never the key) on a permanent error."""
     last = ""
     for attempt in range(tries):
         req = urllib.request.Request(url, data=body, method=method, headers=headers)
+        wait = min(30.0, 1.5 * 2 ** attempt) * (0.75 + 0.5 * random.random())
         try:
             with urllib.request.urlopen(req, timeout=timeout, context=SSL_CTX) as r:
                 return r.status, {k.lower(): v for k, v in r.headers.items()}, r.read()
@@ -311,9 +326,14 @@ def http(method: str, url: str, headers: dict, body: bytes | None = None, timeou
             last = f"{e.code}: {detail}"
             if e.code not in RETRY_STATUS:
                 raise SystemExit(f"tts: {label or url} failed {last}")
+            try:
+                wait = max(wait, min(60.0, float(e.headers.get("Retry-After") or 0)))
+            except (TypeError, ValueError):
+                pass
         except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
             last = str(e)
-        time.sleep(2 * (attempt + 1))
+        if attempt < tries - 1:
+            time.sleep(wait)
     raise SystemExit(f"tts: {label or url} failed after {tries} tries ({last})")
 
 
@@ -337,6 +357,7 @@ class Usage:
 
     def __init__(self, key: str = ""):
         self.key = key
+        self._lock = threading.RLock()   # scenes are voiced in parallel threads
         self.cost = 0.0
         self.tts_chars = 0
         self.stt_seconds = 0.0
@@ -346,6 +367,10 @@ class Usage:
         self._prices: dict[str, float] | None = None
 
     def price(self, model: str) -> float:
+        with self._lock:
+            return self._price(model)
+
+    def _price(self, model: str) -> float:
         if self._prices is None:
             self._prices = {}
             try:
@@ -356,6 +381,10 @@ class Usage:
         return self._prices.get(model, 0.0)
 
     def add_tts(self, gen_id: str | None, chars: int, model: str, voice: str) -> None:
+        with self._lock:
+            self._add_tts(gen_id, chars, model, voice)
+
+    def _add_tts(self, gen_id: str | None, chars: int, model: str, voice: str) -> None:
         self.tts_chars += chars
         self.model, self.voice = model, voice
         if gen_id:
@@ -365,6 +394,15 @@ class Usage:
             warn("speech response had no X-Generation-Id; cost estimated from list price")
 
     def add_stt(self, gen_id: str | None, usage: dict, seconds: float, model: str) -> None:
+        with self._lock:
+            self._add_stt(gen_id, usage, seconds, model)
+
+    def add_chars(self, chars: int, model: str, voice: str) -> None:
+        with self._lock:
+            self.tts_chars += chars
+            self.model, self.voice = model, voice
+
+    def _add_stt(self, gen_id: str | None, usage: dict, seconds: float, model: str) -> None:
         secs = float(usage.get("seconds") or seconds or 0)
         self.stt_seconds += secs
         if usage.get("cost") is not None:
@@ -375,35 +413,49 @@ class Usage:
             self.cost += secs * self.price(model)
 
     def resolve(self) -> None:
-        """Generation stats appear a few seconds after the call; poll until each is in."""
+        """Generation stats appear a few seconds after the call; poll them (in parallel) until each is in."""
         deadline = time.time() + 60
-        for gen_id, est in self.pending:
-            got = None
-            while got is None and time.time() < deadline:
-                try:
-                    req = urllib.request.Request(f"{OR_API}/generation?id={gen_id}",
-                                                 headers=or_headers(self.key, False))
-                    with urllib.request.urlopen(req, timeout=30, context=SSL_CTX) as r:
-                        d = json.loads(r.read()).get("data") or {}
-                    tc = d.get("total_cost", d.get("usage"))
-                    if tc is not None:
-                        got = float(tc)
-                        break
-                except urllib.error.HTTPError as e:
-                    if e.code not in (404, 429, 500, 502, 503):
-                        break
-                except Exception:
-                    pass
-                time.sleep(2)
-            if got is None:
-                warn(f"no generation stats for {gen_id}; using the list-price estimate ${est:.5f}")
-                got = est
-            self.cost += got
-        self.pending = []
+        pending, self.pending = list(self.pending), []
+        if pending:
+            with cf.ThreadPoolExecutor(max_workers=min(8, len(pending))) as pool:
+                self.cost += sum(pool.map(lambda p: self._resolve_one(p[0], p[1], deadline), pending))
+
+    def _resolve_one(self, gen_id: str, est: float, deadline: float) -> float:
+        got = None
+        while got is None and time.time() < deadline:
+            try:
+                req = urllib.request.Request(f"{OR_API}/generation?id={gen_id}",
+                                             headers=or_headers(self.key, False))
+                with urllib.request.urlopen(req, timeout=30, context=SSL_CTX) as r:
+                    d = json.loads(r.read()).get("data") or {}
+                tc = d.get("total_cost", d.get("usage"))
+                if tc is not None:
+                    got = float(tc)
+                    break
+            except urllib.error.HTTPError as e:
+                if e.code not in (404, 429, 500, 502, 503):
+                    break
+            except Exception:
+                pass
+            time.sleep(2)
+        if got is None:
+            warn(f"no generation stats for {gen_id}; using the list-price estimate ${est:.5f}")
+            got = est
+        return got
 
     def write(self, uf: Path) -> None:
+        """Adds this run's totals to usage.json under an exclusive lock (concurrent runs add up)."""
         if not (self.tts_chars or self.stt_seconds or self.cost):
             return
+        uf.parent.mkdir(parents=True, exist_ok=True)
+        with open(uf.parent / "usage.lock", "a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                self._write(uf)
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+
+    def _write(self, uf: Path) -> None:
         try:
             usage = json.loads(uf.read_text()) if uf.exists() else {}
         except Exception:
@@ -418,8 +470,9 @@ class Usage:
         if self.voice:
             usage["voice"] = self.voice
         usage["elevenlabs_characters"] = usage["tts_characters"]  # legacy key
-        uf.parent.mkdir(parents=True, exist_ok=True)
-        uf.write_text(json.dumps(usage))
+        tmp = uf.with_name(f".usage.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(usage))
+        os.replace(tmp, uf)
 
 
 # --------------------------------------------------------------------------- model / voice ids
@@ -823,8 +876,7 @@ def synth_elevenlabs(items, key, voice, prev_text, next_text, out_wav: Path, tmp
         body["seed"] = int(voice["seed"])
     vid = resolve_voice(key, voice)
     res = el_request(f"/text-to-speech/{vid}/with-timestamps", key, body, "?output_format=mp3_44100_128")
-    acct.tts_chars += len(text)
-    acct.model, acct.voice = model, vid
+    acct.add_chars(len(text), model, vid)
     mp3 = tmp / "el.mp3"
     mp3.write_bytes(base64.b64decode(res["audio_base64"]))
     to_wav(mp3, out_wav)
@@ -995,12 +1047,178 @@ def list_voices(provider: str) -> None:
     print("voices", ", ".join(sorted(voices)))
 
 
+# --------------------------------------------------------------------------- pending markers
+
+def pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def marker(ws: Path, sid: str) -> Path:
+    return ws / "audio" / f"{sid}.pending"
+
+
+def mark_pending(ws: Path, sids: list[str], pid: int) -> None:
+    for sid in sids:
+        marker(ws, sid).write_text(str(pid))
+
+
+def clear_pending(ws: Path, sid: str) -> None:
+    try:
+        marker(ws, sid).unlink()
+    except FileNotFoundError:
+        pass
+
+
+def live_pending(ws: Path) -> list[str]:
+    out = []
+    for m in sorted((ws / "audio").glob("*.pending")):
+        try:
+            if pid_alive(int(m.read_text().strip() or 0)):
+                out.append(m.stem)
+        except (ValueError, OSError):
+            pass
+    return out
+
+
+def atomic_write(path: Path, text: str) -> None:
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
+
+
+# --------------------------------------------------------------------------- main
+
+def default_jobs() -> int:
+    try:
+        return max(1, min(8, int(os.environ.get("WAITWHAT_TTS_JOBS", "") or 5)))
+    except ValueError:
+        return 5
+
+
+def todo(ws: Path, plan: dict, voice: dict, backend: str, pron: dict, only: list[str] | None,
+         force: bool) -> list[dict]:
+    """Scenes that need voicing (narration, voice or backend changed since the last take)."""
+    jobs = []
+    scenes = plan.get("scenes", [])
+    for i, sc in enumerate(scenes):
+        sid = sc["id"]
+        if only and sid not in only:
+            continue
+        narration = sc.get("narration", "").strip()
+        sv = {**voice, **{k: v for k, v in (sc.get("voice") or {}).items() if k in (*SETTINGS, "max_pause")}}
+        vkey = {k: sv.get(k) for k in sorted(sv) if k != "backend"}
+        sha = hashlib.sha256(json.dumps([narration, backend, vkey, pron], sort_keys=True).encode()).hexdigest()[:16]
+        jf, wf = ws / "audio" / f"{sid}.json", ws / "audio" / f"{sid}.wav"
+        if not force and jf.exists() and wf.exists():
+            try:
+                if json.loads(jf.read_text()).get("sha") == sha:
+                    print(f"  = {sid}: unchanged", flush=True)
+                    continue
+            except Exception:
+                pass
+        jobs.append({"i": i, "sid": sid, "narration": narration, "sv": sv, "sha": sha,
+                     "lead": float(sc.get("lead_in", DEFAULT_LEAD)),
+                     "prev": plain_text(scenes[i - 1].get("narration", "")) if i > 0 else "",
+                     "next": plain_text(scenes[i + 1].get("narration", "")) if i + 1 < len(scenes) else ""})
+    return jobs
+
+
+def voice_one(ws: Path, job: dict, backend: str, keys: tuple[str, str], pron: dict, acct: Usage) -> str:
+    """Voice one scene: synthesis, transcription + alignment, pause tightening. Writes the wav,
+    then the json (atomically, so a waiting renderer never reads half a file)."""
+    sid, narration, sv = job["sid"], job["narration"], job["sv"]
+    jf, wf = ws / "audio" / f"{sid}.json", ws / "audio" / f"{sid}.wav"
+    if not narration:
+        concat_wavs([(None, 1.0)], wf)
+        atomic_write(jf, json.dumps({"id": sid, "text": "", "duration": 1.0, "lead_in": 0.0,
+                                     "words": [], "marks": {}, "sha": job["sha"]}, indent=1))
+        return f"  + {sid}: (no narration) 1.0s of silence"
+    items = parse(narration, pron)
+    or_key, el_key = keys
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        out = tmp / "take.wav"
+        if backend == "openrouter":
+            words, marks_at, meta = synth_openrouter(items, or_key, sv, job["prev"], job["next"], out, tmp, acct)
+        elif backend == "elevenlabs":
+            words, marks_at, meta = synth_elevenlabs(items, el_key, sv, job["prev"], job["next"], out, tmp, acct)
+        else:
+            words, marks_at, meta = synth_say(items, sv, out, tmp)
+        words = tighten(out, items, words, float(sv.get("max_pause") or 0))
+        dur = wav_duration(out)
+        staged = wf.with_name(f".{sid}.{os.getpid()}.wav")
+        shutil.copyfile(out, staged)
+        os.replace(staged, wf)
+    data = {"id": sid, "text": plain_text(narration), "duration": round(dur, 3), "lead_in": job["lead"],
+            "words": words, "marks": marks_from_items(items, words, dur), "sha": job["sha"], **meta}
+    atomic_write(jf, json.dumps(data, indent=1))
+    extra = f" align={meta['align']['method']}:{meta['align']['match']:.0%}" if "align" in meta else ""
+    return (f"  + {sid}: {dur:5.1f}s, {len(words)} words, marks={list(data['marks'])} "
+            f"[{meta['backend']}]{extra}")
+
+
+def wait_background(ws: Path, timeout: float) -> int:
+    """Block until a `--background` run (and any other live voicing) finishes; print its log."""
+    pid_f, exit_f, log_f = ws / "audio" / ".tts.pid", ws / "audio" / ".tts.exit", ws / "logs" / "tts.log"
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        pid = int(pid_f.read_text().strip() or 0) if pid_f.exists() else 0
+        if not (pid and pid_alive(pid)) and not live_pending(ws):
+            break
+        time.sleep(0.5)
+    else:
+        print(f"tts: still voicing after {timeout:.0f}s: {', '.join(live_pending(ws))}", file=sys.stderr)
+        return 1
+    if log_f.exists():
+        print(log_f.read_text().rstrip())
+    try:
+        return int(exit_f.read_text().strip()) if exit_f.exists() else 0
+    except ValueError:
+        return 1
+
+
+def start_background(argv: list[str], ws: Path) -> None:
+    """Re-run this command detached. The child marks its scenes pending before we return, so a
+    renderer started right after this never misses them."""
+    (ws / "logs").mkdir(parents=True, exist_ok=True)
+    for f in (ws / "audio" / ".tts.exit",):
+        f.unlink(missing_ok=True)
+    args = [a for a in argv if a != "--background"] + ["--_child"]
+    child = subprocess.Popen([sys.executable, os.path.abspath(__file__), *args], stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, start_new_session=True, text=True)
+    (ws / "audio" / ".tts.pid").write_text(str(child.pid))
+    ready = child.stdout.readline().strip() if child.stdout else ""
+    if child.stdout:
+        child.stdout.close()
+    if not ready.startswith("ready"):
+        code = child.wait()
+        log_f = ws / "logs" / "tts.log"
+        print(log_f.read_text().rstrip() if log_f.exists() else "", file=sys.stderr)
+        raise SystemExit(f"tts: background voicing failed to start (exit {code})")
+    print(f"tts: voicing {ready[5:].strip() or 'nothing (all unchanged)'} in the background "
+          f"(pid {child.pid}). `ww render` waits for each scene's audio; `ww tts --wait` waits for all "
+          f"and prints the result.")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--ws", default="workspace", help="workspace dir (default ./workspace)")
     ap.add_argument("--scene", action="append", help="only these scene ids")
     ap.add_argument("--backend", choices=["auto", *PROVIDERS])
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("-j", "--jobs", type=int, default=default_jobs(),
+                    help="scenes voiced in parallel (default WAITWHAT_TTS_JOBS or 5)")
+    ap.add_argument("--background", action="store_true",
+                    help="return at once; voice in a detached process (log: workspace/logs/tts.log)")
+    ap.add_argument("--wait", action="store_true", help="wait for a --background run and print its result")
+    ap.add_argument("--wait-timeout", type=float, default=900)
+    ap.add_argument("--_child", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--voices", action="store_true", help="list voices (and models) and exit")
     a = ap.parse_args()
 
@@ -1009,6 +1227,34 @@ def main() -> None:
         return
 
     ws = Path(a.ws).resolve()
+    (ws / "audio").mkdir(parents=True, exist_ok=True)
+    if a.wait:
+        sys.exit(wait_background(ws, a.wait_timeout))
+    if a.background:
+        start_background(sys.argv[1:], ws)
+        return
+
+    handshake = None
+    if a._child:
+        # Detached run: all output goes to logs/tts.log; the parent only reads the "ready" line,
+        # which goes to the original stdout once every scene to voice is marked pending.
+        handshake = os.fdopen(os.dup(1), "w")
+        log = open(ws / "logs" / "tts.log", "w", buffering=1)
+        sys.stdout.flush(); sys.stderr.flush()
+        os.dup2(log.fileno(), 1)
+        os.dup2(log.fileno(), 2)
+    try:
+        code = run(a, ws, handshake)
+    except SystemExit as e:
+        code = e.code if isinstance(e.code, int) else 1
+        if e.code is not None and not isinstance(e.code, int):
+            print(e.code, file=sys.stderr)
+    if a._child:
+        (ws / "audio" / ".tts.exit").write_text(str(code))
+    sys.exit(code)
+
+
+def run(a: argparse.Namespace, ws: Path, handshake) -> int:
     plan = json.loads((ws / "plan.json").read_text())
     voice = {**DEFAULTS, **(plan.get("voice") or {})}
     backend = choose_provider(a.backend, voice.get("backend"))
@@ -1016,59 +1262,40 @@ def main() -> None:
     el_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
     acct = Usage(or_key)
     pron = plan.get("pronunciations") or {}
-    scenes = plan.get("scenes", [])
-    (ws / "audio").mkdir(parents=True, exist_ok=True)
-
+    jobs = todo(ws, plan, voice, backend, pron, a.scene, a.force)
+    mark_pending(ws, [j["sid"] for j in jobs], os.getpid())
+    if handshake is not None:
+        handshake.write("ready " + " ".join(j["sid"] for j in jobs) + "\n")
+        handshake.close()
+    failed: list[str] = []
+    t0 = time.time()
     try:
-        for i, sc in enumerate(scenes):
-            sid = sc["id"]
-            if a.scene and sid not in a.scene:
-                continue
-            narration = sc.get("narration", "").strip()
-            lead = float(sc.get("lead_in", DEFAULT_LEAD))
-            sv = {**voice, **{k: v for k, v in (sc.get("voice") or {}).items() if k in (*SETTINGS, "max_pause")}}
-            vkey = {k: sv.get(k) for k in sorted(sv) if k != "backend"}
-            sha = hashlib.sha256(json.dumps([narration, backend, vkey, pron], sort_keys=True).encode()).hexdigest()[:16]
-            jf, wf = ws / "audio" / f"{sid}.json", ws / "audio" / f"{sid}.wav"
-            if not a.force and jf.exists() and wf.exists():
+        with cf.ThreadPoolExecutor(max_workers=max(1, min(a.jobs, len(jobs) or 1))) as pool:
+            futs = {pool.submit(voice_one, ws, j, backend, (or_key, el_key), pron, acct): j["sid"] for j in jobs}
+            for fut in cf.as_completed(futs):
+                sid = futs[fut]
                 try:
-                    if json.loads(jf.read_text()).get("sha") == sha:
-                        print(f"  = {sid}: unchanged")
-                        continue
-                except Exception:
-                    pass
-            if not narration:
-                concat_wavs([(None, 1.0)], wf)
-                jf.write_text(json.dumps({"id": sid, "text": "", "duration": 1.0, "lead_in": 0.0,
-                                          "words": [], "marks": {}, "sha": sha}, indent=1))
-                continue
-            items = parse(narration, pron)
-            prev_t = plain_text(scenes[i - 1].get("narration", "")) if i > 0 else ""
-            next_t = plain_text(scenes[i + 1].get("narration", "")) if i + 1 < len(scenes) else ""
-            with tempfile.TemporaryDirectory() as td:
-                tmp = Path(td)
-                if backend == "openrouter":
-                    words, marks_at, meta = synth_openrouter(items, or_key, sv, prev_t, next_t, wf, tmp, acct)
-                elif backend == "elevenlabs":
-                    words, marks_at, meta = synth_elevenlabs(items, el_key, sv, prev_t, next_t, wf, tmp, acct)
-                else:
-                    words, marks_at, meta = synth_say(items, sv, wf, tmp)
-            words = tighten(wf, items, words, float(sv.get("max_pause") or 0))
-            dur = wav_duration(wf)
-            data = {"id": sid, "text": plain_text(narration), "duration": round(dur, 3), "lead_in": lead,
-                    "words": words, "marks": marks_from_items(items, words, dur), "sha": sha, **meta}
-            jf.write_text(json.dumps(data, indent=1))
-            extra = f" align={meta['align']['method']}:{meta['align']['match']:.0%}" if "align" in meta else ""
-            print(f"  + {sid}: {dur:5.1f}s, {len(words)} words, marks={list(data['marks'])} "
-                  f"[{meta['backend']}]{extra}")
+                    print(fut.result(), flush=True)
+                except BaseException as e:   # SystemExit from http() carries the API's message
+                    failed.append(sid)
+                    print(f"  ✗ {sid}: {e}", file=sys.stderr, flush=True)
+                finally:
+                    clear_pending(ws, sid)
     finally:
+        for j in jobs:
+            clear_pending(ws, j["sid"])
         # running totals for the worker's cost accounting: <job>/.waitwhat/usage.json
         if acct.pending:
             acct.resolve()
         if acct.tts_chars or acct.stt_seconds:
             acct.write(ws.parent / ".waitwhat" / "usage.json")
             cost = f", ${acct.cost:.4f} measured" if backend == "openrouter" else ""
-            print(f"tts: {acct.tts_chars} characters, {acct.stt_seconds:.1f}s transcribed{cost}")
+            print(f"tts: {len(jobs)} scene(s) in {time.time() - t0:.1f}s, {acct.tts_chars} characters, "
+                  f"{acct.stt_seconds:.1f}s transcribed{cost}", flush=True)
+    if failed:
+        print(f"tts: FAILED for {', '.join(failed)} (re-run `ww tts --scene <id>`)", file=sys.stderr, flush=True)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

@@ -428,6 +428,42 @@ def strip_tags(text: str) -> str:
     return re.sub(r"\s+", " ", _TAG.sub(" ", text)).strip()
 
 
+_TAG_ATTRS = re.compile(r"""<\s*(bookmark|break)\b([^>]*)/\s*>""", re.I)
+_ATTR = re.compile(r"""(\w+)\s*=\s*["']([^"']*)["']""")
+
+
+def estimate_timing(narration: str, wps: float = 3.3) -> dict:
+    """Timing estimated from narration text (≈200 wpm, sentence ends +0.25 s, <break/> as written),
+    in the shape tts.py writes. Lets a scene preview before its audio exists; the real audio replaces it."""
+    words, marks, t = [], {}, 0.0
+    pos = 0
+
+    def add(chunk: str):
+        nonlocal t
+        for tok in chunk.split():
+            d = max(0.18, (0.6 + len(tok.strip(".,;:!?")) / 6.0) / wps)
+            words.append({"w": tok, "start": round(t, 3), "end": round(t + d, 3)})
+            t += d + (0.25 if re.search(r"[.!?…]['\")\]]*$", tok) else 0.0)
+
+    for m in _TAG_ATTRS.finditer(narration or ""):
+        add(narration[pos:m.start()])
+        attrs = dict(_ATTR.findall(m.group(2)))
+        if m.group(1).lower() == "bookmark":
+            name = attrs.get("mark") or attrs.get("name")
+            if name:
+                marks[name] = round(t, 3)
+        else:
+            v = attrs.get("time", "0.5s").strip().lower()
+            try:
+                t += float(v[:-2]) / 1000 if v.endswith("ms") else float(v.rstrip("s") or 0.5)
+            except ValueError:
+                t += 0.5
+        pos = m.end()
+    add((narration or "")[pos:])
+    return {"duration": round(t, 3), "lead_in": 0.35, "words": words, "marks": marks,
+            "text": strip_tags(narration or ""), "estimated": True}
+
+
 class _Timing:
     def __init__(self, data: dict | None, scene_id: str):
         self.scene_id = scene_id
@@ -470,10 +506,21 @@ class WaitwhatScene(Scene):
                 data = json.loads(audio_json.read_text())
             except Exception as e:
                 logger.warning(f"waitwhat: bad timing file {audio_json}: {e}")
+        self.timing_estimated = False
+        if not data:
+            sc = next((x for x in (load_plan(self.ws).get("scenes") or []) if x.get("id") == self.scene_id), None)
+            if sc and (sc.get("narration") or "").strip():
+                data = estimate_timing(sc["narration"])
+                if sc.get("lead_in") is not None:
+                    data["lead_in"] = float(sc["lead_in"])
+                self.timing_estimated = True
         self.timing = _Timing(data, self.scene_id)
         if self.lead_in is not None:
             self.timing.lead = float(self.lead_in)
-        if not self.timing.ok:
+        if self.timing_estimated:
+            logger.warning(f"waitwhat: no narration audio for '{self.scene_id}' yet; timing estimated from "
+                           f"plan.json (run `ww tts`, then re-render for the final cut).")
+        elif not self.timing.ok:
             logger.warning(f"waitwhat: no narration timing for '{self.scene_id}' "
                            f"(run scripts/tts.py first). Using estimates.")
         self._lint: list[dict] = []

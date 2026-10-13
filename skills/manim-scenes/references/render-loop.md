@@ -3,11 +3,16 @@
 The frames-first verification loop is adapted from iart-ai/manim-skills (MIT). See THIRD_PARTY.md.
 
 ## Commands
-- `ww render <id> [<id>…]` renders at 1080p30, skips scenes whose code, shared code, style lib
-  and narration timing are unchanged. `--force` to re-render anyway, `--draft` for 480p,
-  `-j 3` for parallel scenes, `--all` for every scene in the plan.
+- `ww render <id> --preview`: 480p15 into `workspace/previews/`, about 2-3x faster than the
+  final. Use it for every look while iterating.
+- `ww render <id> [<id>…]` renders the final 1080p30 into `workspace/renders/` (what `ww stitch`
+  uses); it skips scenes whose code, shared code, style lib and narration timing are unchanged.
+  `--force` to re-render anyway, `--all` for every scene in the plan, `-j N` scenes in parallel
+  (default `WAITWHAT_RENDER_JOBS`, else cores − 2).
+- If `ww tts` is still voicing the scene, render waits for its audio (`--wait-audio 0` to skip).
 - Output per scene (one JSON line): `ok`, `duration`, `layout_issues`, `missing_marks`,
-  `warning` (e.g. video shorter than narration), `sheet` (contact sheet path).
+  `warning` (e.g. video shorter than narration, timing estimated because there is no audio yet,
+  narration changed since it was voiced), `sheet` (contact sheet path).
 - Full logs: `workspace/logs/<id>.render.log`. Lint: `workspace/logs/<id>.layout.json`.
 
 ## When it fails (max 3 attempts per scene)

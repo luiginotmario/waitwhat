@@ -41,7 +41,9 @@ class Squares(WaitwhatScene):
 
 ## Timing comes from the voice
 
-`ww tts` has already written `workspace/audio/<id>.json`. Use `self.until("mark")` as a
+`ww tts` writes `workspace/audio/<id>.json` (it may still be voicing while you write the code:
+`ww render` waits for the scene's audio, and without audio the lib estimates timings from the
+narration text). Use `self.until("mark")` as a
 `run_time` (or `self.play_until("mark", ...)`, `self.wait_until("mark")`, `self.until("word:square")`)
 so visuals land on the words that describe them, and end every scene with `self.finish()`.
 If the scene is longer than its narration, that is fine (silent beats are good); if it is shorter,
@@ -56,19 +58,23 @@ end with `self.finish(fade=True)` and mark `"cut"`. Patterns in `references/patt
 
 ## Render → fix → look
 
-1. `ww render <id>` (1080p30; `--draft` for a fast 480p look). Unchanged scenes are skipped.
+1. `ww render <id> --preview` for every look while iterating (480p15, about 2-3x faster), then
+   `ww render <id>` once for the final 1080p30. Unchanged scenes are skipped.
 2. On failure the traceback is printed. Fix the cause, not the symptom. **Max 3 attempts**; then
    simplify the visual (fewer objects, no LaTeX trick, no updater) and say so.
    Common errors and fixes: `references/gotchas.md`.
-3. On success, **look** at `workspace/frames/<id>_sheet.jpg` (3 frames, top to bottom in time).
+3. On success, **look** at `workspace/frames/<id>_sheet.jpg` (3 frames, top to bottom in time;
+   from the latest render, preview or final).
    Also read `layout_issues` in the JSON line (overlapping or off-frame text found by the lib).
    Fix: overlapping or clipped text, labels far from their objects, tiny text, empty or
    cluttered frames, colour drift, things that should have been dimmed. Checklist in
    `references/render-loop.md`.
-4. Re-render after fixes. A scene is done when you would be happy to pause on any frame.
+4. Preview again after fixes. A scene is done when you would be happy to pause on any frame;
+   then render the final once.
 
-Use subagents per scene when the orchestrator asks (see the waitwhat skill's
-`references/subagents.md`); they follow this same loop and report back in a few lines.
+For videos of 3+ scenes the orchestrator runs this loop in parallel subagents, one per scene
+(the waitwhat skill's `references/subagents.md` and `references/scene-builder.md`); they report
+back in a line or two.
 
 ## Templates for any topic
 

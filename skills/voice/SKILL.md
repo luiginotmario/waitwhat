@@ -8,7 +8,10 @@ description: Narration for waitwhat videos - choosing an ElevenLabs voice (via O
 Narration is recorded per scene **before** animation, because the audio's length and word
 timings drive every scene's timing. The tool is `ww tts`; it reads `workspace/plan.json`, writes
 `workspace/audio/<id>.wav` + `<id>.json` (duration, word times, bookmark times), and skips
-scenes whose narration and voice settings are unchanged.
+scenes whose narration and voice settings are unchanged. Scenes are voiced in parallel (about 5
+at a time, retrying OpenRouter rate limits). `ww tts --background` returns at once and voices
+in a detached process, so scene code can be written meanwhile (`ww render` waits for a scene's
+audio); `ww tts --wait` waits for it and prints the result.
 
 ## Providers
 
@@ -134,7 +137,7 @@ symbols and numbers the way a person says them.
 
 ## Check the result
 
-After `ww tts`, read the printed lines. A scene far longer than planned means the narration is
+After `ww tts` (or `ww tts --wait` for a background run), read the printed lines. A scene far longer than planned means the narration is
 too long for its idea: trim words, not pauses. An `align=stt:…%` below ~90% means the voice said
 something other than the script (an odd number, a misread name); fix it with a pronunciation.
 Below 60%, `tts.py` falls back to proportional timing. Listen to one scene if you can (`afplay

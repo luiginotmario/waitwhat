@@ -12,11 +12,15 @@ Usage (run from the job dir, or pass --job DIR):
   progress.py scene 3 rendering         # by 1-based index ...
   progress.py scene squares done        # ... or by scene id
   progress.py show
+Safe under concurrent calls (parallel scene subagents): every read-modify-write holds an exclusive
+lock on .waitwhat/progress.lock, and the file is replaced atomically.
 Stdlib only, so it runs with any python3.
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import json
 import os
 import sys
@@ -50,6 +54,19 @@ def save(job: Path, data: dict) -> None:
     with os.fdopen(fd, "w") as f:
         json.dump(data, f, indent=1)
     os.replace(tmp, p)  # atomic: the poller never sees half a file
+
+
+@contextlib.contextmanager
+def locked(job: Path):
+    """Exclusive lock for one load → modify → save, so concurrent `scene` calls never lose updates."""
+    lock = job / ".waitwhat" / "progress.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock, "a") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
 
 
 def refresh_outline(data: dict) -> None:
@@ -94,6 +111,16 @@ def main() -> None:
     a = ap.parse_args()
 
     job = Path(a.job).resolve()
+    if a.cmd == "show":
+        data = load(job)
+        refresh_outline(data)
+        print(json.dumps(data, indent=1))
+        return
+    with locked(job):
+        update(job, a)
+
+
+def update(job: Path, a: argparse.Namespace) -> None:
     data = load(job)
 
     if a.cmd == "stage":
@@ -144,10 +171,6 @@ def main() -> None:
         hit["status"] = a.status
         if a.message:
             data["message"] = a.message
-    elif a.cmd == "show":
-        refresh_outline(data)
-        print(json.dumps(data, indent=1))
-        return
     refresh_outline(data)
     save(job, data)
 

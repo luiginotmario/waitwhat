@@ -14,6 +14,15 @@ Tools live in `${CLAUDE_PLUGIN_ROOT}/scripts/` (if that path did not expand, use
 `${CLAUDE_PLUGIN_ROOT}/scripts/ww <cmd>`. `ww help` lists commands. The first run of any render
 installs the toolchain (`ww setup`, idempotent, a few minutes).
 
+If this skill and its companions (storytelling, voice, manim-scenes and its style guide, sound,
+the job contract, the subagent flow) are already in your system prompt, as the waitwhat worker
+preloads them, don't invoke or re-read them: start working. Read other references only when
+the step that needs them comes up.
+
+**Pace.** Wall-clock time matters as much as cost. Batch independent tool calls into one
+message (parallel Reads, a Write plus a progress update), write `plan.json` in one go rather
+than in many small edits, and let the subagents and background jobs below do the waiting.
+
 ## 1. Find the job
 
 - **Worker / Mac app**: the cwd contains `request.json`. That is the job dir. Do not move it.
@@ -23,7 +32,8 @@ installs the toolchain (`ww setup`, idempotent, a few minutes).
 - **A refine** (`request.json` has `refine`, or the user says "wait, what?" about a video):
   load the `waitwhat:refine` skill and follow it instead of planning from scratch.
 
-The job I/O contract is not negotiable: read `references/job-contract.md` once per job. Outputs
+The job I/O contract is not negotiable: read `references/job-contract.md` once per job (unless
+it is already in your context). Outputs
 are `out/video.mp4` (1080p h264+aac), `out/thumbnail.jpg`, `out/manifest.json`; everything you
 make lives in `workspace/` (it is archived and becomes the base of future refines).
 
@@ -45,7 +55,9 @@ duration. The one principle: **cover everything the request needs, and nothing i
 There is no default length; a narrow question makes a short video and a broad one a long video.
 
 - **`request.json` has `plan`** (the web app plans before the job starts, with
-  `references/planning.md`): that is your checklist. `plan.outline` is the ordered list of what
+  `references/planning.md`): that is your checklist. **Do not re-plan from scratch** and don't
+  read `planning.md`: the scope, order and length are decided. Go straight to the scene plan
+  (step 4) and refine the outline only where the story needs it. `plan.outline` is the ordered list of what
   the video must cover, `plan.asked` is what the person explicitly asked for, `plan.est_minutes`
   the length it was scoped to, `plan.note`/`plan.deferred` what a free preview left out, and
   `request.answers` any clarifying answers the person gave. You may refine it (split an item,
@@ -90,37 +102,49 @@ head: if a sentence would sound odd spoken by a person, rewrite it. Check the to
 against `duration_target` (≈190 words per minute); if you are far off, revisit the scope, not the
 speaking pace.
 
-## 5. Voice before animation
+## 5. Voice: final words, then voice in the background
 
 Load `waitwhat:voice`. Choose the voice, set `plan.voice`, add bookmarks where visuals must land
-on a word, then `ww tts`. Scene timing comes from these audio files, so narrate *before*
-animating, and re-run `ww tts --scene <id>` whenever a scene's narration changes.
+on a word. Scene timing comes from the audio, so the narration must be **final** before any
+scene is animated; the audio itself doesn't have to exist yet. Start it with
+`ww tts --background`: it voices every scene in parallel in a detached process and returns at
+once, and `ww render` of a scene waits for that scene's audio. (`ww tts` without the flag does
+the same in the foreground.) Re-run `ww tts --scene <id>` whenever a scene's narration changes.
 
-## 6. Animate scene by scene
+## 6. Animate: one subagent per scene, in parallel
 
 Load `waitwhat:manim-scenes`. One Manim file per scene in `workspace/scenes/<id>.py`, shared
-objects in `workspace/scenes/shared.py`. Render with `ww render <id>`, fix errors (max 3 tries),
-then *look* at `workspace/frames/<id>_sheet.jpg` and fix anything overlapping, cut off,
-unreadable or ugly.
+objects in `workspace/scenes/shared.py`.
 
-Use subagents for scenes whenever you can: brief one per scene (or a few small scenes each) so
-tracebacks and render logs stay out of your context. The briefing template is in
-`references/subagents.md`. Write `shared.py`, the palette and the narration timings *before*
-fanning out, render the hook yourself first to lock the look, then run the rest in parallel.
-Review every returned contact sheet yourself; consistency across scenes is your job.
+**For any video with 3 or more scenes, scenes are built by parallel subagents: this is the
+default flow, not a suggestion.** Follow `references/subagents.md`:
+1. Finish `plan.json` and `shared.py` (the style reference; no reference render first), then
+   `ww progress plan`.
+2. `ww tts --background`, then, in the same turn or the next, launch one `scene-builder`
+   subagent per scene as several Agent tool calls in ONE message (at most
+   `WAITWHAT_RENDER_JOBS` at once; more scenes go in batches, in outline order).
+3. Each subagent writes its scene, previews it fast (`ww render <id> --preview`, 480p15),
+   checks the frames, fixes (max 3 tries), renders the final 1080p30 once, marks its progress,
+   and replies in a line or two.
+4. You review every contact sheet in one turn and send back only the fixes that matter.
+   Consistency across scenes is your job; the subagents keep render logs and tracebacks out of
+   your context.
+
+Fallback: with no Agent/Task tool, or 1–2 scenes, run the same loop yourself scene by scene
+(still `--preview` for every look, one final render per scene).
 
 ### Long videos (roughly 10+ scenes)
 
 Length is not a reason to cut corners, but your own context is finite, so delegate harder:
-- Plan, narrate and voice the whole video first (`ww tts` handles every scene in one call).
-- Render the hook yourself to lock the look, then hand **every other scene** to a subagent,
-  a few at a time (3 to 4 in parallel), working through the outline in order. Keep your own
-  context for direction and review: look at contact sheets, not render logs.
+- Plan, narrate and start the voice for the whole video first (`ww tts --background` voices
+  every scene).
+- Hand every scene to a subagent, batch by batch in outline order. Keep your own context for
+  direction and review: look at contact sheets, not render logs.
 - Keep `shared.py` and the palette stable once the fan-out starts; if you must change them,
   re-render the scenes that import what changed.
-- `ww render --all -j 3` and `ww stitch` take longer on long videos: give those Bash calls the
+- `ww render --all` and `ww stitch` take longer on long videos: give those Bash calls the
   maximum timeout, or run them in the background and poll.
-- Update progress per scene as subagents report back, so a long render never looks stuck.
+- Progress is per scene (the subagents report it), so a long render never looks stuck.
 
 ## 7. Sound, stitch, check
 
