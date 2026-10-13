@@ -39,6 +39,24 @@ Bash as the scene code: `ww narrate <id> <<'EOF'` … `EOF` (saves it and voices
 seconds) `&& cat > workspace/scenes/<id>.py <<'EOF'` … `EOF` `&& ww render <id>`. Never edit
 plan.json directly: other builders are writing their narration into it at the same time.
 
+## 3D scenes (`"dim": "3d"` in your plan entry)
+
+Most scenes are 2D. If yours is marked `"dim": "3d"` (`ww brief` shows it, and the director's
+brief says so), Read `<plugin>/skills/manim-scenes/references/3d.md` in your first turn, together
+with `ww brief` and `shared.py`, and copy the closest 3D template (`exploded_layers.py`,
+`cutaway.py`, `surface_wave.py`, `orbit.py`). Then the loop is the same, with these differences:
+- `class X(WaitwhatScene3D)`; timing, `sfx`, themes and `finish()` work as in 2D.
+- All text flat on the screen: `self.tag(...)`, `self.pin(...)`, `self.callout(...)`,
+  `self.label_layers(...)`, `self.fixed(...)`. The lint flags text left in 3D space.
+- Move the camera to reveal, then hold still while the narration explains (`camera_to`, `orbit`,
+  1.5–3 s each). Frame with `self.fit_zoom(...)` for both aspects; in 9:16 look from higher on
+  wide flat things.
+- Stay in budget: the house constructors at their default resolutions, ≤ 1500 faces, updaters
+  that move solids removed when done. A "render budget" layout issue means: fewer faces or less
+  motion. A 3D render takes 4–10 s; over ~20 s, something is too heavy.
+- If a 3D scene fails three times, fall back to a 2D picture of the same idea (a cross-section,
+  a side view) and say so.
+
 ## Loop
 
 1. One Bash: write `workspace/scenes/<id>.py` (a heredoc) `&& ww render <id>`. One

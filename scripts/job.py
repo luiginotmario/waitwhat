@@ -219,7 +219,7 @@ def cmd_brief(a) -> None:
     k = next((i for i, s in enumerate(scenes) if s.get("id") == a.id), None)
     if k is None:
         sys.exit(f"brief: no scene '{a.id}' in plan.json (ids: {', '.join(s.get('id', '?') for s in scenes)})")
-    keys = ("id", "title", "visual", "build", "transition", "energy", "theme", "say", "hands_off", "narration")
+    keys = ("id", "title", "visual", "build", "transition", "energy", "theme", "dim", "say", "hands_off", "narration")
     near = lambda i: {kk: scenes[i][kk] for kk in keys if kk in scenes[i]} if 0 <= i < len(scenes) else None
     out = {"scene": scenes[k], "position": f"{k + 1} of {len(scenes)}", "theme": plan.get("theme", "classic"),
            "palette": plan.get("palette", {}), "previous": near(k - 1), "next": near(k + 1),
@@ -229,6 +229,10 @@ def cmd_brief(a) -> None:
     out["aspect"] = aspect.aspect_of(job / "workspace")
     if out["aspect"] == aspect.VERTICAL:
         out["layout"] = "9:16 vertical: stack, don't spread; larger type; one central focus; nothing in the bottom 15% (manim-scenes style guide, 'Vertical 9:16')"
+    if str(scenes[k].get("dim", "")).lower() == "3d":
+        out["dim"] = "3d"
+        out["read_first"] = str(Path(__file__).resolve().parent.parent / "skills" / "manim-scenes" / "references" / "3d.md")
+        out["3d"] = "a 3D scene: WaitwhatScene3D, text flat on the screen, house constructors within the render budget (read read_first)"
     if not (scenes[k].get("narration") or "").strip():
         # parallel script mode: the builder writes this scene's narration, so it needs the whole arc
         out["arc"] = [{kk: s.get(kk) for kk in ("id", "title", "say", "hands_off") if s.get(kk)} for s in scenes]

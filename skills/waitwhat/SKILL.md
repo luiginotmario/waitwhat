@@ -131,6 +131,15 @@ aren't. Give every scene an `energy` (`high`, `medium`, `low`, `reveal`, `close`
 an arc instead of one flat level: a bright hook, steady build-up, a hush before the insight, a
 lift at the reveal, a calm close.
 
+**2D by default; 3D only where depth explains.** For a physical "how does X work" topic (a device,
+the body, a machine, nature, materials, molecules, planets), mark the one or two scenes whose point
+is a structure in space with `"dim": "3d"`: layers stacked in depth (a touchscreen, skin), an
+inside hidden by an outside (a battery, an earbud, a planet's core), a quantity over a plane (a
+ripple, a field), an orbit or a tilt. They are drawn in the same 3b1b look (shaded solids, a
+camera that tilts or orbits, flat labels) at the same speed. Everything else stays 2D, and a
+clear 2D cross-section beats a 3D object that only looks impressive. In the scene's `visual`, say
+what the camera does (e.g. "starts flat, tilts on 'layers'; explode; labels one per bookmark").
+
 **Choose the world** (`plan.theme`): one theme for the whole video, matched to the topic (the
 table is in the style guide): `classic` black for math and abstract ideas (the default),
 `chalkboard` for lessons and derivations, `blueprint` for machines and systems, `space` for

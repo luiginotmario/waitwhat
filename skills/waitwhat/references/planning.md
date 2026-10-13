@@ -196,3 +196,10 @@ questions and picks the most useful reading; in an interactive chat you may ask 
 questions with your question tool, under the same rules (most requests: none). Then copy the
 result into `workspace/plan.json` as `outline`, `asked`, `deferred` and `duration_target`
 (`est_minutes` × 60).
+
+2D or 3D is not part of this plan: the outline says what to cover, not how to draw it. When the
+scenes are planned from it, a scene whose point is a physical structure in depth (layers, an
+inside, a surface, an orbit) may be marked `"dim": "3d"` (the `waitwhat` skill, step 4); every
+other scene, and every scene by default, is 2D. When an outline item is about such a structure
+("what's inside a battery", "the layers of a touchscreen"), say so plainly in its summary: that is
+the cue for the scene plan.

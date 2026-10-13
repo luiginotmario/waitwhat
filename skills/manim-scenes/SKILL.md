@@ -1,6 +1,6 @@
 ---
 name: manim-scenes
-description: Write, render and visually check Manim Community Edition scenes in the waitwhat house style (3Blue1Brown look - CMU Serif, semantic colour palette, smooth transforms - on the video's theme, from classic black to chalkboard, blueprint, paper or night sky, with sound cues tied to the animations). One file per scene, timed to narration bookmarks, render → traceback → fix loop, contact-sheet review for overlapping or off-screen text. Includes templates for math proofs, timelines, flow/causal diagrams, maps, molecules, code walkthroughs, comparisons and company explainers. Use whenever animating scenes for a waitwhat video.
+description: Write, render and visually check Manim Community Edition scenes in the waitwhat house style (3Blue1Brown look - CMU Serif, semantic colour palette, smooth transforms - on the video's theme, from classic black to chalkboard, blueprint, paper or night sky, with sound cues tied to the animations). One file per scene, timed to narration bookmarks, render → traceback → fix loop, contact-sheet review for overlapping or off-screen text. Includes templates for math proofs, timelines, flow/causal diagrams, maps, molecules, code walkthroughs, comparisons and company explainers, plus 3D scenes in the same look (exploded layers, cutaways, surfaces, orbits) for the few physical ideas that need depth. Use whenever animating scenes for a waitwhat video.
 ---
 
 # Manim scenes, waitwhat style
@@ -63,6 +63,19 @@ buttons sit. Details and the helper table: `references/style-guide.md`, "Layout"
 "Vertical 9:16". The templates `comparison.py`, `flow_causal.py` and `timeline.py` adapt to both
 aspects; adapt the others with the same helpers.
 
+## 3D scenes (only where depth explains something)
+
+A scene marked `"dim": "3d"` in the plan is a `WaitwhatScene3D` (same import, same timing, sound,
+themes, aspects and lint): shaded solids and surfaces in the palette colours, a camera that
+tilts, orbits and dollies, and every label flat on the screen (`tag`, `pin`, `callout`,
+`label_layers`, never text in 3D space). Helpers for the house 3D look: `exploded_layers()`,
+`cutaway()`, `graph_surface(live=True)`, `ball()`/`slab()`/`cylinder()`, `rotate_reveal()`,
+`particles()`/`ripples()`/`glow_path()` for invisible physics. Keep it rare (one or two scenes in a
+video) and within the render budget (≤ 1500 faces, surfaces ≤ 24 × 24, camera moves of 1.5–3 s,
+then hold still): then a 3D scene renders in 4–10 s, the same class as 2D. **Read
+`references/3d.md` before writing one** (camera grammar, labels, patterns, budget, 9:16 framing,
+pitfalls), and start from a 3D template.
+
 ## Timing comes from the voice
 
 `ww tts` writes `workspace/audio/<id>.json` (it may still be voicing while you write the code:
@@ -117,8 +130,12 @@ back in a line or two.
 | `code_walkthrough.py` | algorithms, code, with a live variable panel |
 | `comparison.py` | A vs B, before/after, numbers that grow into bars |
 | `company.py` | company explainers: problem → product → example → money → users |
+| `exploded_layers.py` | 3D: what something is made of (a touchscreen stack, a solar cell, skin, a road) |
+| `cutaway.py` | 3D: what is inside (a battery cell, a cable, a planet, an eye), and what flows in it |
+| `surface_wave.py` | 3D: a quantity over a plane that moves (ripples, sound, a membrane, a field) |
+| `orbit.py` | 3D: things going around things (planets, moons, satellites, a tilted axis) |
 
 Read only the template you need. Adapt freely; they show the style, not the only way. The
-comparison, flow and timeline templates are written once for both aspects (`by_aspect`, `MAIN`,
-`SAFE_CENTER`); the others are laid out for 16:9, so re-place their objects with the layout
-helpers in a 9:16 video.
+comparison, flow and timeline templates and the four 3D templates are written once for both
+aspects (`by_aspect`, `MAIN`, `SAFE_CENTER`, `fit_zoom`); the others are laid out for 16:9, so
+re-place their objects with the layout helpers in a 9:16 video.

@@ -47,6 +47,9 @@ Scene: squares (2 of 6) → workspace/scenes/squares.py. Your brief is its entry
 <optional: one line the plan doesn't say, e.g. "keep the triangle exactly where hook leaves it">
 ```
 
+For a scene marked `"dim": "3d"`, the optional line is always:
+`3D scene: in your first turn also Read /abs/plugin/skills/manim-scenes/references/3d.md.`
+
 Each subagent writes its scene, renders the final 1080p (`ww render <id>`, a few seconds; it
 marks the scene's progress), looks at the 2x2 sheet, fixes only real problems, and replies in
 one or two lines (scene, duration vs narration, status, deviations).

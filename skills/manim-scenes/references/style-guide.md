@@ -18,6 +18,8 @@ re-deriving values, so all scenes match.
 - `SAFE_W`, `SAFE_H`, `SAFE_TOP`, `SAFE_BOTTOM`, `SAFE_LEFT`, `SAFE_RIGHT`, `SAFE_CENTER` hold the
   safe area for the current aspect; `FRAME_W`/`FRAME_H` the frame. Keep text ≥ 0.5 units from
   every edge (the lib's layout lint flags anything closer, and in 9:16 anything in the bottom band).
+- 3D scenes (`WaitwhatScene3D`, plan `"dim": "3d"`) keep this frame: labels flat on the screen
+  inside the safe area, the 3D picture centred on `SAFE_CENTER` (details in `references/3d.md`).
 - The background is the video's **theme** (`plan.theme`), painted by `WaitwhatScene` behind
   everything; it is not a mobject, so fades and `self.clear()` never touch it. Never draw your
   own full-frame background. `grid_paper()` is still allowed as a faint "workbench" backdrop on

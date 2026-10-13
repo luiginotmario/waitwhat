@@ -968,6 +968,12 @@ class WaitwhatScene(Scene):
     # ---- layout lint
     _TEXTY = (Text, MarkupText, MathTex, Tex)
 
+    def _screen_box(self, m) -> tuple[float, float, float, float]:
+        """Where a mobject is on screen, as (x0, y0, x1, y1) in frame units (WaitwhatScene3D projects)."""
+        x0, y0 = m.get_corner(DL)[:2]
+        x1, y1 = m.get_corner(UR)[:2]
+        return float(x0), float(y0), float(x1), float(y1)
+
     def _texts(self):
         out = []
 
@@ -995,8 +1001,7 @@ class WaitwhatScene(Scene):
         texts = [t for t in self._texts() if self._visible(t) and t.width > 0]
         boxes = []
         for t in texts:
-            x0, y0 = t.get_corner(DL)[:2]
-            x1, y1 = t.get_corner(UR)[:2]
+            x0, y0, x1, y1 = self._screen_box(t)
             name = (getattr(t, "original_text", None) or getattr(t, "tex_string", None)
                     or getattr(t, "text", None) or type(t).__name__)
             name = str(name)[:40]
@@ -1037,8 +1042,7 @@ class WaitwhatScene(Scene):
             for sub in [m] + [s for s in m.submobjects if s.submobjects or isinstance(s, self._TEXTY)][:12]:
                 if sub.width == 0 and sub.height == 0:
                     continue
-                x0, y0 = sub.get_corner(DL)[:2]
-                x1, y1 = sub.get_corner(UR)[:2]
+                x0, y0, x1, y1 = self._screen_box(sub)
                 items.append({
                     "type": type(sub).__name__,
                     "text": str(getattr(sub, "original_text", None) or getattr(sub, "tex_string", "")
@@ -1081,10 +1085,11 @@ class WaitwhatScene(Scene):
             if key not in seen:
                 seen.add(key)
                 uniq.append(item)
-        out.write_text(json.dumps({"scene": self.scene_id, "issues": uniq,
-                                   "missing_marks": self._missing,
-                                   "duration": round(self.now, 2),
-                                   "narration_end": round(self.narration_end, 2)}, indent=1))
+        report = {"scene": self.scene_id, "issues": uniq, "missing_marks": self._missing,
+                  "duration": round(self.now, 2), "narration_end": round(self.narration_end, 2)}
+        if getattr(self, "_perf", None):
+            report["perf"] = self._perf  # WaitwhatScene3D: faces on screen, camera motion, render estimate
+        out.write_text(json.dumps(report, indent=1))
         cues = sorted(getattr(self, "_sfx_cues", []), key=lambda c: c["t"])
         (self.ws / "logs" / f"{self.scene_id}.cues.json").write_text(json.dumps(
             {"scene": self.scene_id, "theme": THEME, "write": SFX_WRITE, "duration": round(self.now, 3),
@@ -1179,3 +1184,9 @@ class WaitwhatOutro(Scene):
         self.play(FadeIn(sub, rate_func=ease_out), run_time=0.5)
         self.wait(0.9)
         self.play(FadeOut(VGroup(mark, sub)), run_time=0.55)
+
+
+# --------------------------------------------------------------------------- 3D
+# WaitwhatScene3D and the 3D helpers (surfaces, solids, exploded layers, cutaways, callouts, camera
+# moves) live in waitwhat_3d.py; importing them here keeps one import for every scene file.
+from waitwhat_3d import *  # noqa: E402,F401,F403

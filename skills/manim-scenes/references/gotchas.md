@@ -45,12 +45,13 @@ manim-video skill (MIT); each item was re-checked against the version `ww setup`
 - `group.move_to(p)` centres the group's *bounding box*, labels included. To line up two
   diagrams, position them by their anchor object: `g.shift(target - g.frame.get_center())`.
 - `Arrow` shrinks its tip on short arrows; for very short ones use `max_tip_length_to_length_ratio`.
-- 3D: use it only if depth actually explains something. Mix the classes as
-  `class Orbit(WaitwhatScene, ThreeDScene)` (this order) to keep narration timing, then
-  `self.set_camera_orientation(phi=65*DEGREES, theta=-45*DEGREES)`. Text in 3D scenes should be
-  fixed in frame: `self.add_fixed_in_frame_mobjects(label)`.
+- 3D: only when the plan marks the scene `"dim": "3d"`. Subclass `WaitwhatScene3D` (never mix
+  `WaitwhatScene` with `ThreeDScene` by hand) and follow `references/3d.md`: text flat on the
+  screen (`tag`, `pin`, `callout`), house constructors sized for the render budget.
 
 ## Rendering
+- A scene id that equals a Python module name (`wave`, `math`, `random`, `types`, `code`, `string`)
+  shadows it: scene files are on the import path, so Manim itself fails to import. Pick another id.
 - Each file must define its scene class in that file (subclassing an imported scene class is
   fine; importing one is not enough).
 - `--disable_caching` is on (`ww render`), so stale partial movies are never reused.

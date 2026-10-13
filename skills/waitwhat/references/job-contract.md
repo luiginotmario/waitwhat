@@ -112,6 +112,7 @@ workspace/
       "transition": "cut",               // how THIS scene is entered: continuous (starts on the previous scene's last frame, no whoosh) | cut
       "energy": "high",                  // delivery + tempo: high | medium | low | reveal | close (optional, default medium)
       "theme": "space",                  // optional: only when the story moves to another place
+      "dim": "3d",                       // optional: a 3D scene (WaitwhatScene3D, manim-scenes references/3d.md); default 2D
       "lead_in": 0.35                    // optional seconds before narration starts
     }
   ],
