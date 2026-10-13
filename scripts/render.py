@@ -39,6 +39,8 @@ from __future__ import annotations
 import argparse
 import ast
 import concurrent.futures as cf
+import contextlib
+import fcntl
 import hashlib
 import json
 import os
@@ -177,6 +179,67 @@ def extract_frames(ws: Path, sid: str, mp4: Path, n: int, extra: list[float] | N
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", *ins, "-filter_complex", fc, "-q:v", "3", str(sheet)],
                        check=False)
     return frames, str(sheet)
+
+
+SLOTS_DIR = ROOT / ".cache" / "render-slots"
+
+
+def _env_int(name: str) -> int:
+    try:
+        return max(0, int(os.environ.get(name, "") or 0))
+    except ValueError:
+        return 0
+
+
+def render_slots() -> int:
+    """Manim processes allowed at once on this machine, across every job (WAITWHAT_RENDER_SLOTS).
+    A 1080p render keeps ~3-4 cores busy, so the default is a third of the cores: more only
+    oversubscribes the CPU (same throughput, every render slower)."""
+    return _env_int("WAITWHAT_RENDER_SLOTS") or max(2, (os.cpu_count() or 4) // 3)
+
+
+def _try_slot(d: Path, n: int):
+    """Take one of n flock'd lock files in d without blocking: the open file, or None."""
+    d.mkdir(parents=True, exist_ok=True)
+    for i in range(n):
+        fh = open(d / f"slot-{i}.lock", "a")
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return fh
+        except BlockingIOError:
+            fh.close()
+    return None
+
+
+@contextlib.contextmanager
+def render_slot(ws: Path | None = None):
+    """A machine-wide semaphore: one of N lock files under the plugin's .cache, held with flock while a
+    Manim render runs, so concurrent jobs (WORKER_CONCURRENCY > 1) can't oversubscribe the CPU. A job
+    also holds one of its own WAITWHAT_RENDER_JOB_SLOTS (default: all of them) under
+    <job>/.waitwhat/render-slots first, so one job can't take every machine slot while another waits.
+    The kernel drops a lock when its process dies, so a crashed render never leaks a slot. Yields the
+    seconds spent waiting."""
+    n = render_slots()
+    per_job = min(n, _env_int("WAITWHAT_RENDER_JOB_SLOTS") or n)
+    job_dir = (ws.parent / ".waitwhat" / "render-slots") if ws is not None and per_job < n else None
+    t0 = time.time()
+    k = 0
+    mine = machine = None
+    try:
+        while machine is None:
+            if job_dir is not None and mine is None:
+                mine = _try_slot(job_dir, per_job)
+            if job_dir is None or mine is not None:
+                machine = _try_slot(SLOTS_DIR, n)
+            if machine is None:
+                k += 1
+                time.sleep(min(0.5, 0.05 * k))
+        yield round(time.time() - t0, 1)
+    finally:
+        for fh in (machine, mine):
+            if fh is not None:
+                fcntl.flock(fh, fcntl.LOCK_UN)
+                fh.close()
 
 
 def default_jobs() -> int:
@@ -382,8 +445,9 @@ def _render_one(ws: Path, sid: str, quality: str, fps: int, force: bool, nframes
     (ws / "logs" / f"{sid}.cues.json").unlink(missing_ok=True)
     cmd = [str(VENV_BIN / "manim"), "render", QUALITY[quality], "--fps", str(fps), "--disable_caching",
            "--media_dir", str(media), "-o", sid, str(src), cls]
-    t0 = time.time()
-    proc = subprocess.run(cmd, cwd=ws, env=toolchain_env(ws, sid), capture_output=True, text=True)
+    with render_slot(ws) as slot_wait:
+        t0 = time.time()
+        proc = subprocess.run(cmd, cwd=ws, env=toolchain_env(ws, sid), capture_output=True, text=True)
     (ws / "logs").mkdir(parents=True, exist_ok=True)
     log = proc.stdout + "\n" + proc.stderr
     (ws / "logs" / f"{sid}.render.log").write_text(ANSI.sub("", log))
@@ -413,6 +477,8 @@ def _render_one(ws: Path, sid: str, quality: str, fps: int, force: bool, nframes
         res["preview"] = True
     if waited >= 1:
         res["waited_for_audio"] = waited
+    if slot_wait >= 1:
+        res["waited_for_render_slot"] = slot_wait
     lay = ws / "logs" / f"{sid}.layout.json"
     if lay.exists():
         try:

@@ -26,6 +26,13 @@ transformers from scratch" may need fifteen or more. Length follows the material
 The words someone uses tell you what they already know. Decide the level before anything else,
 because it changes which prerequisites exist, how fast the video moves and how deep it ends.
 
+**A chosen level overrides the inference.** If the request carries a depth level the person
+picked (`level`, or `<level>` in the run context) other than `auto`, use it, whatever the wording:
+- `eli10`: newcomer floor. Define every term, analogies from daily life first. Audience starts `newcomer`.
+- `expert`: assume the fundamentals and go deep (mechanism, trade-offs, edge cases). Audience starts `expert`.
+- `jargon`: precise technical terminology throughout; define only rare terms. Audience starts `expert`.
+`auto` (or no level): infer it from the wording, as below.
+
 - **Expert**: precise technical terms used correctly ("idempotency keys", "PSP", "KV cache",
   "eigenvalues of the Hessian", "Raft vs Paxos"), or a technical attachment. They want depth and
   pace: skip what their own question already takes for granted, use the precise terms, spend
@@ -168,7 +175,8 @@ Field rules:
   explainer on X".
 - `est_minutes`: number (half-minute steps).
 - `audience`: the level (`newcomer`, `intermediate` or `expert`, read from the asker's
-  vocabulary, see 2), a colon, then who it's for and how deep, one line.
+  vocabulary, or forced by a chosen `level`, see 2), a colon, then who it's for and how deep,
+  one line; name a chosen level in it (e.g. `"newcomer (eli10): ..."`, `"expert (jargon): ..."`).
 - `question`: the one question the whole video answers, in a curious viewer's words.
 - `asked`: every topic, question or constraint the person explicitly asked for, as short phrases
   (their words where possible). Every entry must be covered by at least one outline item (or, in

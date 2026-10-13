@@ -7,6 +7,8 @@
 #   ww tts [--scene id] [--force]    narrate scenes (in parallel) → workspace/audio/
 #   ww tts --background | --wait     voice in a detached process / wait for it
 #   ww brief <id>                    a scene's plan entry + its neighbours' handoffs, theme, palette
+#   ww narrate <id> <<'EOF' … EOF    set one scene's narration (locked, for parallel builders) + voice it
+#   ww script                        the whole narration in order, with voiced lengths
 #   ww render <id...> | --all [-j N] final 1080p30 (seconds) → workspace/renders/ + 2x2 sheet, marks progress
 #   ww render <id> --preview         480p15 look → workspace/previews/ (only for heavy scenes)
 #   ww render --check                import shared.py with the toolchain (before fanning out)
@@ -29,6 +31,8 @@ case "$cmd" in
   refine)   exec python3 "$ROOT/scripts/job.py" refine "$@" ;;
   check)    exec python3 "$ROOT/scripts/job.py" check "$@" ;;
   brief)    exec python3 "$ROOT/scripts/job.py" brief "$@" ;;
+  narrate)  exec python3 "$ROOT/scripts/job.py" narrate "$@" ;;
+  script)   exec python3 "$ROOT/scripts/job.py" script "$@" ;;
   progress) exec python3 "$ROOT/scripts/progress.py" "$@" ;;
   tts)      exec python3 "$ROOT/scripts/tts.py" "$@" ;;
   fetch)    exec python3 "$ROOT/scripts/fetch.py" "$@" ;;
@@ -39,6 +43,6 @@ case "$cmd" in
   sfx)      py "$ROOT/scripts/sfx_library.py" "$@" ;;
   backdrop) exec python3 "$ROOT/scripts/backdrop.py" "$@" ;;
   manim)    "$ROOT/scripts/run.sh" manim "$@" ;;
-  help|-h|--help) sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//' ;;
+  help|-h|--help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) echo "ww: unknown command '$cmd' (try: ww help)" >&2; exit 2 ;;
 esac

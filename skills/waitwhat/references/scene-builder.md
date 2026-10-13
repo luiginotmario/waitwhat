@@ -26,6 +26,19 @@ look, reply. Fix only what is actually wrong.
   code against the bookmarks in the narration; `ww render` waits for your scene's audio while
   it is still being voiced.
 
+## Parallel script: when your scene's `narration` is empty
+
+Then you write the words too, first. `ww brief <id>` gives you `say` (what to get across, in
+order; every fact and number is there: add none), `hands_off` (how you pick up from the previous
+scene and what you hand to the next), `seconds` (your length, ≈3.2 words per second), the
+`arc` of the whole video and the voice settings. Write narration a person would say aloud,
+following the voice and storytelling rules in your instructions: open on the previous scene's
+`hands_off`, end on yours, explain every term the first time it is said, and put
+`<bookmark mark="name"/>` just before the 1–4 words your visuals must land on. Then, in the same
+Bash as the scene code: `ww narrate <id> <<'EOF'` … `EOF` (saves it and voices it, a few
+seconds) `&& cat > workspace/scenes/<id>.py <<'EOF'` … `EOF` `&& ww render <id>`. Never edit
+plan.json directly: other builders are writing their narration into it at the same time.
+
 ## Loop
 
 1. One Bash: write `workspace/scenes/<id>.py` (a heredoc) `&& ww render <id>`. One

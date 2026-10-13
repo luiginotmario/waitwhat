@@ -86,6 +86,9 @@ Write into `workspace/plan.json` (schema in `references/job-contract.md`):
   (`plan.question` if present). Pick the most interesting honest version of the request.
   "Explain transformers" becomes "How can predicting the next word produce something that seems
   to reason?"
+- **A chosen depth wins**: `request.level` other than `auto` is a hard override of any inferred
+  audience: `eli10` = define every term, analogies first; `expert` = assume the fundamentals, go
+  deep; `jargon` = precise technical terminology throughout, defining only rare terms.
 - **Audience and depth** (`plan.audience` if present; it starts with the level: `newcomer`,
   `intermediate` or `expert`). If you plan yourself, read the asker's vocabulary
   (`references/planning.md`, "Read the asker"): precise jargon ("idempotency keys", "PSP", "KV

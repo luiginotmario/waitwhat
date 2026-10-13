@@ -68,6 +68,11 @@ with examples, in `references/narration.md`.
 
 The level in `plan.audience` (`newcomer`, `intermediate`, `expert`, read from the asker's own
 vocabulary) sets the floor and the pace. Same structure, different floor.
+**A level the person chose (`request.level`) is a hard override** of that inference; only
+`auto` (or none) leaves it to the wording:
+- `eli10`: define every term, analogies first, numbers small enough to picture.
+- `expert`: assume the fundamentals, go deep: mechanism, trade-offs, edge cases.
+- `jargon`: precise technical terminology throughout, defining only rare terms.
 - **Newcomer** (vague, everyday wording): open on a concrete everyday picture, earn every term,
   and go progressively deeper chapter by chapter so the ending reaches real substance, not just
   the overview.

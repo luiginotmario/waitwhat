@@ -5,7 +5,7 @@ they create a job dir and run the agent with that dir as cwd.
 
 ```
 <job>/
-  request.json              {prompt, attachments:[{path,name,mime}], plan?, answers?, research?, refine?:{text, at_seconds, frame_path}}
+  request.json              {prompt, attachments:[{path,name,mime}], plan?, answers?, research?, level?, refine?:{text, at_seconds, frame_path}}
   inputs/                   downloaded attachments (+ the refine frame png)
   workspace/                previous version's workspace when refining; otherwise empty
   .waitwhat/progress.json   written ONLY via `ww progress …`; the worker polls it
@@ -20,6 +20,8 @@ they create a job dir and run the agent with that dir as cwd.
   question?, asked?:[string], note?, deferred?:[string]}`. `request.answers` (optional) holds the
   person's answers to clarifying questions: `[{id, q, a}]` (`a` null when skipped). The outline is
   the checklist the video must cover; see the `waitwhat` skill.
+- `request.level` (optional): the depth the person picked, `eli10 | auto | expert | jargon`;
+  anything but `auto` overrides the audience inferred from the wording (planning.md §2).
 - `request.research` (optional): pages the web planner already fetched for this request (the URLs
   in the prompt), saved before the run as `workspace/research/<slug>.md` with the usual source
   header: `[{url, path, chars}]` (`path` relative to the job dir). Use them; don't fetch them again

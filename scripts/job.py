@@ -6,6 +6,10 @@
   job.py refine ./waitwhat-videos/why-is-the-sky-blue "wait, what is scattering?" --at 42.5 [--frame f.png]
         → ./waitwhat-videos/why-is-the-sky-blue-v2/  with the previous workspace copied in
   job.py check [JOB]      → validates out/ against the contract (exit 1 on problems)
+  job.py brief <id>       → a scene builder's brief (its plan entry, neighbours, the arc)
+  job.py narrate <id> [--text T | --file F | stdin] [--no-voice]
+                          → set one scene's narration in plan.json (locked: parallel builders) and voice it
+  job.py script           → the whole narration in order, for a read-through
 
 The worker creates job dirs itself; these commands make local Claude Code use behave the same way.
 Stdlib only.
@@ -13,7 +17,11 @@ Stdlib only.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import json
+import os
+import tempfile
 import mimetypes
 import re
 import shutil
@@ -127,6 +135,71 @@ def cmd_check(a) -> None:
     print(f"✓ {job} satisfies the job contract")
 
 
+@contextlib.contextmanager
+def plan_lock(ws: Path):
+    """Exclusive lock for a read-modify-write of plan.json (scene builders narrate in parallel)."""
+    with open(ws / ".plan.lock", "a") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
+def save_plan(ws: Path, plan: dict) -> None:
+    fd, tmp = tempfile.mkstemp(dir=ws, prefix=".plan.", suffix=".json")
+    with os.fdopen(fd, "w") as f:
+        json.dump(plan, f, indent=1, ensure_ascii=False)
+    os.replace(tmp, ws / "plan.json")  # atomic: tts/render/progress never read half a file
+
+
+def cmd_narrate(a) -> None:
+    """One scene's narration → plan.json (under the lock, atomically), then `tts.py --scene <id>`."""
+    job = Path(a.job).resolve()
+    ws = job / "workspace"
+    text = a.text if a.text is not None else (Path(a.file).read_text() if a.file else sys.stdin.read())
+    text = re.sub(r"[ \t]*\n[ \t]*", " ", text).strip()
+    if not text:
+        sys.exit("narrate: empty narration")
+    with plan_lock(ws):
+        plan = json.loads((ws / "plan.json").read_text())
+        hit = next((s for s in plan.get("scenes", []) if s.get("id") == a.id), None)
+        if hit is None:
+            sys.exit(f"narrate: no scene '{a.id}' in plan.json")
+        hit["narration"] = text
+        save_plan(ws, plan)
+    words = len(re.sub(r"<[^>]+>", " ", text).split())
+    print(f"narrate: {a.id}: {words} words (~{words / 3.2:.0f} s at 190 wpm)"
+          + (f", target {hit['seconds']} s" if hit.get("seconds") else ""), flush=True)
+    if a.no_voice:
+        return
+    tts = Path(__file__).resolve().parent / "tts.py"
+    sys.exit(subprocess.run([sys.executable, str(tts), "--ws", str(ws), "--scene", a.id]).returncode)
+
+
+def cmd_script(a) -> None:
+    """The narration in plan order (markup kept, so bookmarks are visible), with voiced lengths."""
+    ws = Path(a.job).resolve() / "workspace"
+    plan = json.loads((ws / "plan.json").read_text())
+    total_w, total_s = 0, 0.0
+    for k, sc in enumerate(plan.get("scenes", []), start=1):
+        nar = sc.get("narration") or ""
+        words = len(re.sub(r"<[^>]+>", " ", nar).split())
+        total_w += words
+        dur = ""
+        af = ws / "audio" / f"{sc.get('id')}.json"
+        if af.exists():
+            try:
+                d = float(json.loads(af.read_text()).get("duration", 0))
+                total_s += d
+                dur = f", voiced {d:.1f} s"
+            except Exception:
+                pass
+        print(f"[{k}] {sc.get('id')} ({sc.get('energy', 'medium')}, {words} words{dur}): {nar or '(no narration yet)'}\n")
+    tgt = plan.get("duration_target")
+    print(f"total: {total_w} words, {total_s:.0f} s voiced" + (f" (target {tgt} s)" if tgt else ""))
+
+
 def cmd_brief(a) -> None:
     """A scene builder's brief: its plan.json entry, the neighbours' handoff details, theme and palette."""
     job = Path(a.job).resolve()
@@ -135,11 +208,15 @@ def cmd_brief(a) -> None:
     k = next((i for i, s in enumerate(scenes) if s.get("id") == a.id), None)
     if k is None:
         sys.exit(f"brief: no scene '{a.id}' in plan.json (ids: {', '.join(s.get('id', '?') for s in scenes)})")
-    keys = ("id", "title", "visual", "build", "transition", "energy", "theme")
+    keys = ("id", "title", "visual", "build", "transition", "energy", "theme", "say", "hands_off", "narration")
     near = lambda i: {kk: scenes[i][kk] for kk in keys if kk in scenes[i]} if 0 <= i < len(scenes) else None
     out = {"scene": scenes[k], "position": f"{k + 1} of {len(scenes)}", "theme": plan.get("theme", "classic"),
            "palette": plan.get("palette", {}), "previous": near(k - 1), "next": near(k + 1),
-           "video": {kk: plan[kk] for kk in ("title", "audience", "question") if kk in plan}}
+           "video": {kk: plan[kk] for kk in ("title", "audience", "question", "aha", "duration_target") if kk in plan}}
+    if not (scenes[k].get("narration") or "").strip():
+        # parallel script mode: the builder writes this scene's narration, so it needs the whole arc
+        out["arc"] = [{kk: s.get(kk) for kk in ("id", "title", "say", "hands_off") if s.get(kk)} for s in scenes]
+        out["voice"] = {kk: plan[kk] for kk in ("voice", "pronunciations") if kk in plan}
     print(json.dumps(out, indent=1, ensure_ascii=False))
 
 
@@ -152,8 +229,12 @@ def main() -> None:
     r.add_argument("--at", type=float, required=True); r.add_argument("--frame")
     c = sub.add_parser("check"); c.add_argument("job", nargs="?", default=".")
     b = sub.add_parser("brief"); b.add_argument("id"); b.add_argument("--job", default=".")
+    nr = sub.add_parser("narrate"); nr.add_argument("id"); nr.add_argument("--job", default=".")
+    nr.add_argument("--text"); nr.add_argument("--file"); nr.add_argument("--no-voice", action="store_true")
+    sc = sub.add_parser("script"); sc.add_argument("--job", default=".")
     a = ap.parse_args()
-    {"new": cmd_new, "refine": cmd_refine, "check": cmd_check, "brief": cmd_brief}[a.cmd](a)
+    {"new": cmd_new, "refine": cmd_refine, "check": cmd_check, "brief": cmd_brief,
+     "narrate": cmd_narrate, "script": cmd_script}[a.cmd](a)
 
 
 if __name__ == "__main__":
