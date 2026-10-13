@@ -18,6 +18,11 @@ What you get:
     audio timings written by scripts/tts.py
   * a layout lint that records overlapping or off-frame text to workspace/logs/<id>.layout.json
   * small helpers (text, math, pencil circle, flow boxes, arrows, entrances) and the brand stings
+  * themes (plan.json "theme"): the palette constants below adapt to the video's world, and a
+    procedural background (chalkboard, blueprint, paper, night sky...) is painted behind everything
+  * sound cues: appear/write/draw/erase animations are logged as sound-effect cues against the
+    renderer clock (`self.play(..., sfx="coin")`, `self.sfx("chime", at="reveal")`); stitch.py
+    mixes them under the voice
 
 The narration-timing part is adapted from manim-voiceover (MIT, (c) 2022 the Manim Community
 Developers): bookmarks in narration text become times the animation can wait for.
@@ -46,35 +51,61 @@ from manim import (
 
 # --------------------------------------------------------------------------- frame + palette
 
-config.background_color = "#000000"
+import waitwhat_themes as _themes
+
+
+def _read_plan_for_theme() -> dict:
+    ws = os.environ.get("WAITWHAT_WORKSPACE")
+    if not ws:
+        return {}
+    try:
+        return json.loads((Path(ws) / "plan.json").read_text())
+    except Exception:
+        return {}
+
+
+# The video's world, resolved once per render (one scene per process): WAITWHAT_THEME env, then
+# plan.scenes[].theme, then plan.theme, else "classic" (pure black). Scene code never hard-codes
+# hex colours: the names below (INK, BLUE, YELLOW...) already hold this theme's values.
+THEME, THEME_OPTS = _themes.resolve(_read_plan_for_theme(), os.environ.get("WAITWHAT_SCENE_ID"))
+_T = _themes.THEMES[THEME]
+_C = _T["colors"]
+THEMES = ("classic", "studio", "chalkboard", "blueprint", "space", "ocean", "city", "whiteboard", "graph_paper", "paper", "hills")
+assert set(THEMES) == set(_themes.THEMES)
+IS_DARK = bool(_T["dark"])
+#: lowest y content should use; themes with a skyline or hills along the bottom raise it
+FLOOR_Y = float(_T.get("floor", -3.5))
+
+config.background_color = _T["bg"]
 FRAME_W = config.frame_width      # 14.22
 FRAME_H = config.frame_height     # 8.0
 SAFE_W = FRAME_W - 1.2            # keep ~0.6 units of margin left/right
 SAFE_H = FRAME_H - 0.9            # and ~0.45 top/bottom
 
-BG = "#000000"
-INK = "#FFFFFF"        # primary text / strokes
-INK_2 = "#BBBBBB"      # secondary text (GREY_B)
-INK_3 = "#777777"      # tertiary / structural
-INK_4 = "#333333"      # grids, guides
+BG = _T["bg"]          # classic: #000000
+INK = _T["ink"]        # primary text / strokes (classic #FFFFFF)
+INK_2 = _T["ink_2"]    # secondary text (classic #BBBBBB)
+INK_3 = _T["ink_3"]    # tertiary / structural (classic #777777)
+INK_4 = _T["ink_4"]    # grids, guides (classic #333333)
 
-BLUE = "#58C4DD"
-YELLOW = "#FFFF00"     # emphasis, the pencil, "look here"
-YELLOW_SOFT = "#F7D96F"
-TEAL = "#5CD0B3"
-GREEN = "#83C167"
-RED = "#FC6255"
-PINK = "#D147BD"
-GOLD = "#F0AC5F"
-PURPLE = "#9A72AC"
-ORANGE = "#FF862F"
-MAROON = "#C55F73"
+BLUE = _C["BLUE"]          # classic #58C4DD
+YELLOW = _C["YELLOW"]      # emphasis, the pencil, "look here" (classic #FFFF00; amber on light themes)
+YELLOW_SOFT = _C["YELLOW_SOFT"]
+TEAL = _C["TEAL"]
+GREEN = _C["GREEN"]
+RED = _C["RED"]
+PINK = _C["PINK"]
+GOLD = _C["GOLD"]
+PURPLE = _C["PURPLE"]
+ORANGE = _C["ORANGE"]
+MAROON = _C["MAROON"]
 
 NAMED = {
     "BLUE": BLUE, "YELLOW": YELLOW, "YELLOW_SOFT": YELLOW_SOFT, "TEAL": TEAL, "GREEN": GREEN,
     "RED": RED, "PINK": PINK, "GOLD": GOLD, "PURPLE": PURPLE, "ORANGE": ORANGE,
     "MAROON": MAROON, "WHITE": INK, "INK": INK, "GREY": INK_2, "GRAY": INK_2,
 }
+_CLASSIC_HEX = {h.upper(): n for n, h in _themes.THEMES["classic"]["colors"].items()}
 # Order used when a concept has no colour in plan.json yet. Yellow is skipped on purpose:
 # it is reserved for emphasis.
 CONCEPT_CYCLE = [BLUE, TEAL, PINK, GOLD, GREEN, RED, PURPLE, ORANGE]
@@ -88,6 +119,30 @@ SIZE_HEAD = 48
 SIZE_BODY = 38
 SIZE_LABEL = 32
 SIZE_SMALL = 26  # never go below this; it is unreadable on a phone
+
+
+def _theme_defaults() -> None:
+    """On light themes Manim's own default colour (white) would be invisible: make plain
+    Text/MathTex/Line/Arrow/Square/... default to the theme's ink instead."""
+    if IS_DARK:
+        return
+    import manim as _m
+    for name in ("Text", "MarkupText", "Paragraph", "MathTex", "Tex", "SingleStringMathTex",
+                 "DecimalNumber", "Integer", "Variable", "Line", "DashedLine", "Arrow", "DoubleArrow",
+                 "Vector", "Dot", "Brace", "BraceLabel", "Square", "Rectangle", "RoundedRectangle",
+                 "Polygon", "RegularPolygon", "Triangle", "Arc", "ArcBetweenPoints", "CurvedArrow",
+                 "Angle", "RightAngle", "Elbow", "NumberLine", "Cross", "Star", "Annulus", "Ellipse",
+                 "SurroundingRectangle", "Underline", "ParametricFunction", "FunctionGraph", "VMobject"):
+        cls = getattr(_m, name, None)
+        if cls is None:
+            continue
+        try:
+            cls.set_default(color=INK_2 if name in ("NumberLine",) else INK)
+        except Exception:  # pragma: no cover - never let theming break a render
+            pass
+
+
+_theme_defaults()
 
 # --------------------------------------------------------------------------- fonts
 
@@ -178,7 +233,10 @@ def color_of(concept: str, default: str | None = None) -> str:
     pal = load_plan().get("palette", {}) or {}
     v = pal.get(concept)
     if v:
-        return NAMED.get(str(v).upper(), v)
+        v = str(v)
+        # classic hex values written into the palette still follow the theme
+        v = _CLASSIC_HEX.get(v.upper(), v)
+        return NAMED.get(v.upper(), v)
     if default:
         return default
     h = int(hashlib.md5(concept.encode()).hexdigest(), 16)
@@ -310,14 +368,16 @@ def link(a: Mobject, b: Mobject, color: str = INK_2, curved: float = 0.0, buff: 
 
 
 def grid_paper(opacity: float = 1.0) -> VGroup:
-    """Faint graph-paper backdrop (brand nod). Keep it below ~0.1 effective opacity."""
+    """Faint graph-paper backdrop (brand nod). Keep it below ~0.1 effective opacity.
+    (The blueprint and graph_paper themes already draw a grid behind everything.)"""
+    col = "#2b3a46" if THEME == "classic" else INK_4
     lines = VGroup()
     for x in np.arange(-7, 7.01, 0.5):
         lines.add(Line([x, -4, 0], [x, 4, 0], stroke_width=1 if x % 2 else 1.5,
-                       stroke_color="#2b3a46", stroke_opacity=0.35 * opacity))
+                       stroke_color=col, stroke_opacity=0.35 * opacity))
     for y in np.arange(-4, 4.01, 0.5):
         lines.add(Line([-7.2, y, 0], [7.2, y, 0], stroke_width=1 if y % 2 else 1.5,
-                       stroke_color="#2b3a46", stroke_opacity=0.35 * opacity))
+                       stroke_color=col, stroke_opacity=0.35 * opacity))
     return lines
 
 
@@ -347,7 +407,7 @@ def geojson_shapes(path: str | Path, width: float = 12.0, center=ORIGIN, color: 
 
 
 # CPK-like element colours, softened to sit in the house palette.
-CPK = {"H": "#EEEEEE", "C": "#8A8F98", "N": BLUE, "O": RED, "S": YELLOW_SOFT, "P": ORANGE,
+CPK = {"H": "#EEEEEE" if IS_DARK else "#A9B2BC", "C": "#8A8F98" if IS_DARK else "#5F6670", "N": BLUE, "O": RED, "S": YELLOW_SOFT, "P": ORANGE,
        "Cl": GREEN, "F": "#A6D785", "Na": PURPLE, "Fe": GOLD}
 
 
@@ -377,9 +437,10 @@ def molecule(atoms: list[tuple[str, tuple[float, float]]], bonds: list[tuple[int
 def code_block(code: str, language: str = "python", size: float = 24) -> VGroup:
     """Syntax-highlighted code on a subtle panel (no window chrome)."""
     from manim import Code
-    c = Code(code_string=code.strip("\n"), language=language, formatter_style="monokai",
+    c = Code(code_string=code.strip("\n"), language=language,
+             formatter_style="monokai" if IS_DARK else "friendly",
              add_line_numbers=False, background="rectangle",
-             background_config={"fill_color": "#111317", "stroke_color": "#2a2d33", "stroke_width": 1,
+             background_config={"fill_color": _T["code_bg"], "stroke_color": INK_4, "stroke_width": 1,
                                 "corner_radius": 0.15},
              paragraph_config={"font": FONT_MONO, "font_size": size})
     return fit(c)
@@ -417,6 +478,84 @@ def pulse(mob: Mobject, opacity: float = 0.85, run_time: float = 1.0):
     base = mob.get_fill_opacity()
     return mob.animate(rate_func=rate_functions.there_and_back, run_time=run_time).set_fill(
         opacity=max(opacity, base))
+
+
+def beat(mob: Mobject, scale: float = 1.08, run_time: float = 0.45):
+    """A quick swell-and-settle on the stressed word's object: a visual beat, not a highlight."""
+    return mob.animate(rate_func=rate_functions.there_and_back, run_time=run_time).scale(scale)
+
+
+def erase(*mobs: Mobject, run_time: float = 0.6):
+    """Rub things out (reverse-draw), the board way to remove. Gets the eraser sound automatically."""
+    from manim import AnimationGroup, Uncreate
+    return AnimationGroup(*[Uncreate(m, run_time=run_time) for m in mobs])
+
+
+# --------------------------------------------------------------------------- sound cues
+# Sound effects are tied to on-screen events: WaitwhatScene logs {t, name, gain} cues against the
+# renderer clock into workspace/logs/<id>.cues.json (render.py keeps a copy next to the video) and
+# stitch.py mixes them under the voice from the library in assets/sfx (several takes per sound,
+# rotated so nothing repeats, thinned so it never gets busy).
+
+#: sound names (assets/sfx/library.json); aliases: appear=pop, write=<theme's pen>, draw=pencil, erase=eraser, transition=whoosh, reveal=rise, aha=chime, money=coin, payment=register, typing=keys, error=wrong
+SFX = ("pop", "tick", "click", "pencil", "chalk", "marker", "eraser", "whoosh", "swish", "rise", "chime", "shimmer", "coin", "register", "keys", "paper", "thud", "stamp", "notify", "wrong")
+SFX_ALIASES = {"appear": "pop", "draw": "pencil", "erase": "eraser", "transition": "whoosh", "reveal": "rise",
+               "aha": "chime", "money": "coin", "payment": "register", "typing": "keys", "code": "keys",
+               "error": "wrong", "approve": "stamp", "message": "notify", "land": "thud", "move": "swish"}
+#: the writing sound of this theme's medium: chalk on a chalkboard, marker on a whiteboard, else pencil
+SFX_WRITE = _T.get("write", "pencil")
+
+
+def _sfx_name(name: str) -> str:
+    n = str(name).strip().lower()
+    if n == "write":
+        return SFX_WRITE
+    return SFX_ALIASES.get(n, n)
+
+
+def _anim_kind(anim) -> tuple[str | None, int]:
+    """What an animation does, for sound: (kind, how many staggered parts)."""
+    import manim as _m
+    if isinstance(anim, getattr(_m, "Wait", ())):
+        return None, 0
+    emph = tuple(c for c in (getattr(_m, n, None) for n in (
+        "Circumscribe", "Indicate", "Flash", "ShowPassingFlash", "Wiggle", "FocusOn", "ApplyWave", "Blink",
+        "ShowPassingFlashWithThinningStrokeWidth")) if c)
+    if emph and isinstance(anim, emph):
+        return None, 0
+    tm = getattr(_m, "TransformMatchingAbstractBase", None)
+    if tm and isinstance(anim, tm):
+        return "move", 1
+    if isinstance(anim, (_m.Unwrite, _m.Uncreate)):
+        return "erase", 1
+    if isinstance(anim, getattr(_m, "AddTextLetterByLetter", ())):
+        return "type", 1
+    if isinstance(anim, _m.Write):
+        return "write", 1
+    if isinstance(anim, (_m.Create, _m.DrawBorderThenFill)):
+        return "draw", 1
+    if isinstance(anim, _m.FadeOut):
+        return None, 0
+    if isinstance(anim, (_m.FadeIn, _m.GrowFromPoint, getattr(_m, "SpinInFromNothing", _m.GrowFromPoint))):
+        return "appear", 1
+    if isinstance(anim, _m.AnimationGroup):
+        kinds = [_anim_kind(a) for a in getattr(anim, "animations", [])]
+        kinds = [k for k in kinds if k[0]]
+        if not kinds:
+            return None, 0
+        order = ("erase", "write", "type", "draw", "appear", "move")
+        best = min(kinds, key=lambda k: order.index(k[0]))[0]
+        n = sum(k[1] for k in kinds if k[0] == best)
+        lagged = getattr(anim, "lag_ratio", 0) > 0 or isinstance(anim, getattr(_m, "Succession", ()))
+        return best, (n if lagged else 1)
+    if isinstance(anim, (_m.Transform,)) or type(anim).__name__ in ("_MethodAnimation", "MoveAlongPath", "Rotate"):
+        return "move", 1
+    return None, 0
+
+
+# kind -> (sound, gain dB relative to the library level, is a texture that lasts as long as the motion)
+_AUTO_SFX = {"write": (None, 0.0, True), "type": ("keys", -2.0, True), "draw": (None, -4.0, True),
+             "appear": ("pop", -3.0, False), "erase": ("eraser", -1.0, True)}
 
 
 # --------------------------------------------------------------------------- narration timing
@@ -491,10 +630,14 @@ class WaitwhatScene(Scene):
 
     #: seconds of silence before the narration starts in this scene (stitch.py honours the same value)
     lead_in: float | None = None
+    #: log sound cues automatically for appear / write / draw / erase animations (see play(sfx=...))
+    sfx_auto: bool = True
 
     def setup(self):
         super().setup()
         self.camera.background_color = BG
+        self._sfx_cues: list[dict] = []
+        self._ambient = None
         f = _scene_file(self)
         self.scene_id = os.environ.get("WAITWHAT_SCENE_ID") or f.stem
         self.ws = Path(os.environ.get("WAITWHAT_WORKSPACE") or workspace_of(f))
@@ -527,6 +670,126 @@ class WaitwhatScene(Scene):
         self._missing: list[str] = []
         self._probe_t = float(os.environ["WAITWHAT_PROBE_T"]) if os.environ.get("WAITWHAT_PROBE_T") else None
         self._probed = False
+        self._install_background()
+
+    # ---- theme background (painted into the camera, never a mobject)
+    def _scene_offset(self) -> float:
+        """Approximate start of this scene in the video, so ambient motion continues across scenes."""
+        t = 0.0
+        for sc in load_plan(self.ws).get("scenes") or []:
+            if sc.get("id") == self.scene_id:
+                break
+            try:
+                a = json.loads((self.ws / "audio" / f"{sc['id']}.json").read_text())
+                t += float(a.get("lead_in", 0.35)) + float(a.get("duration", 0)) + 0.8
+            except Exception:
+                t += 15.0
+        return t
+
+    def _install_background(self):
+        if THEME == "classic" and not THEME_OPTS.get("backdrop"):
+            return  # the house look: plain black, nothing to paint
+        try:
+            cam = self.camera
+            seed = int(hashlib.md5(str(load_plan(self.ws).get("title", "waitwhat")).encode()).hexdigest()[:6], 16)
+            bg, amb = _themes.background(THEME, cam.pixel_width, cam.pixel_height, cam.frame_width,
+                                         THEME_OPTS, seed=seed)
+            if bg.shape != cam.pixel_array.shape:
+                return
+            cam.background = bg
+            cam.set_pixel_array(bg)
+            if amb and THEME_OPTS.get("ambient", True) and not os.environ.get("WAITWHAT_NO_AMBIENT"):
+                self._ambient = _themes.Ambient(THEME, bg, amb, config.frame_rate)
+                offset, renderer = self._scene_offset(), self.renderer
+
+                def reset(_cam=cam):
+                    self._ambient.paint(_cam.pixel_array, offset + float(renderer.time))
+                    return _cam
+
+                cam.reset = reset
+                # a scene updater keeps waits rendering frame by frame, so the background keeps moving
+                self.add_updater(lambda dt: None)
+        except Exception as e:  # a background must never break a render
+            logger.warning(f"waitwhat: theme background failed ({THEME}): {e}")
+            self._ambient = None
+
+    def get_moving_and_static_mobjects(self, animations):
+        moving, static = super().get_moving_and_static_mobjects(animations)
+        if self._ambient is not None:
+            # the background changes every frame, so nothing can be cached as a static image
+            return [*static, *moving], []
+        return moving, static
+
+    # ---- sound cues
+    def sfx(self, name: str, at: float | str | None = None, gain: float = 0.0, dur: float | None = None):
+        """Log a sound effect at a moment of this scene: now (default), a bookmark ("reveal"),
+        a word ("word:seven") or absolute seconds. gain is dB relative to the library level
+        (keep within about ±4); dur stretches textures (pencil, chalk, keys, eraser) to a motion."""
+        if at is None:
+            t = self.now
+        elif isinstance(at, str):
+            t = self.mark_time(at)
+        else:
+            t = float(at)
+        self._cue(_sfx_name(name), t, gain, dur, auto=False)
+
+    def _cue(self, name: str, t: float, gain: float = 0.0, dur: float | None = None, auto: bool = False,
+             kind: str | None = None):
+        if name not in SFX:
+            logger.warning(f"waitwhat: unknown sound '{name}' (known: {', '.join(SFX)})")
+        c = {"t": round(max(0.0, t), 3), "name": name, "gain": round(float(gain), 2)}
+        if dur:
+            c["dur"] = round(float(dur), 3)
+        if auto:
+            c["auto"] = True
+        if kind:
+            c["kind"] = kind
+        self._sfx_cues.append(c)
+
+    def _auto_cues(self, anims, t0: float, t1: float):
+        kinds = [_anim_kind(a) for a in anims]
+        kinds = [k for k in kinds if k[0]]
+        if not kinds or t1 - t0 < 0.25:
+            return
+        order = ("erase", "write", "type", "draw", "appear", "move")
+        kind = min(kinds, key=lambda k: order.index(k[0]))[0]
+        n = sum(k[1] for k in kinds if k[0] == kind)
+        if kind not in _AUTO_SFX:
+            return  # moves are silent unless asked for (sfx="swish")
+        snd, gain, texture = _AUTO_SFX[kind]
+        snd = snd or SFX_WRITE
+        dur = t1 - t0
+        if kind == "appear" and n >= 3:
+            k = min(n, 4)
+            for i in range(k):
+                self._cue("tick", t0 + dur * 0.8 * i / k, gain - 1.0, auto=True, kind="appear")
+            return
+        self._cue(snd, t0 + 0.02, gain, min(dur, 2.5) if texture else None, auto=True, kind=kind)
+
+    def _explicit_cues(self, spec, t0: float, t1: float):
+        for item in (spec if isinstance(spec, (list, tuple)) else [spec]):
+            if not item:
+                continue
+            gain = 0.0
+            if isinstance(item, dict):
+                name, where, gain = item.get("name", "pop"), item.get("at", "start"), float(item.get("gain", 0))
+            else:
+                name, _, where = str(item).partition("@")
+                where = where or "start"
+            if where == "start":
+                t = t0
+            elif where == "mid":
+                t = (t0 + t1) / 2
+            elif where == "end":
+                t = t1
+            else:
+                try:
+                    t = t0 + float(where)
+                except ValueError:
+                    t = self.mark_time(where)
+            n = _sfx_name(name)
+            dur = (t1 - t0) if n in ("pencil", "chalk", "marker", "keys", "eraser") and where == "start" else None
+            self._cue(n, t, gain, min(dur, 2.5) if dur else None)
 
     # ---- clock
     @property
@@ -612,6 +875,9 @@ class WaitwhatScene(Scene):
             if x0 < -hw + 0.15 or x1 > hw - 0.15 or y0 < -hh + 0.1 or y1 > hh - 0.1:
                 self._lint.append({"t": round(self.now, 2), "issue": "off-frame", "what": name,
                                    "box": [round(v, 2) for v in (x0, y0, x1, y1)]})
+            elif FLOOR_Y > -3.5 and y0 < FLOOR_Y - 0.05:
+                self._lint.append({"t": round(self.now, 2), "issue": f"below the {THEME} scenery (keep text above y={FLOOR_Y})",
+                                   "what": name, "box": [round(v, 2) for v in (x0, y0, x1, y1)]})
             boxes.append((name, x0, y0, x1, y1, id(t)))
         for i in range(len(boxes)):
             for j in range(i + 1, len(boxes)):
@@ -650,8 +916,20 @@ class WaitwhatScene(Scene):
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps({"scene": self.scene_id, "t": round(self.now, 2), "mobjects": items}, indent=1))
 
-    def play(self, *args, **kwargs):
+    def play(self, *args, sfx=None, **kwargs):
+        """Scene.play, plus sound: sfx="coin" (at the start), "chime@end", "swish@mid",
+        "pop@0.4" (seconds after the start), a bookmark name ("rise@reveal"), a list of those, or
+        sfx=False for silence. Without sfx, appear/write/draw/erase animations get a quiet cue."""
+        t0 = self.now
         super().play(*args, **kwargs)
+        t1 = self.now
+        try:
+            if sfx:
+                self._explicit_cues(sfx, t0, t1)
+            elif sfx is None and self.sfx_auto:
+                self._auto_cues(args, t0, t1)
+        except Exception as e:  # sound bookkeeping must never break a render
+            logger.debug(f"sfx cue failed: {e}")
         try:
             self._check_layout()
         except Exception as e:  # lint must never break a render
@@ -670,6 +948,10 @@ class WaitwhatScene(Scene):
                                    "missing_marks": self._missing,
                                    "duration": round(self.now, 2),
                                    "narration_end": round(self.narration_end, 2)}, indent=1))
+        cues = sorted(getattr(self, "_sfx_cues", []), key=lambda c: c["t"])
+        (self.ws / "logs" / f"{self.scene_id}.cues.json").write_text(json.dumps(
+            {"scene": self.scene_id, "theme": THEME, "write": SFX_WRITE, "duration": round(self.now, 3),
+             "cues": cues}, indent=1))
 
     def tear_down(self):
         self._write_report()
@@ -718,8 +1000,8 @@ def brand_wordmark(height: float = 1.5) -> VGroup | None:
 
 
 def _typeset_wordmark(size: float = 72):
-    wait = Text("wait", font=FONT, font_size=size, color=INK)
-    what = Text("what?", font=FONT, font_size=size, color=YELLOW)
+    wait = Text("wait", font=FONT, font_size=size, color="#FFFFFF")
+    what = Text("what?", font=FONT, font_size=size, color="#FFFF00")
     return VGroup(wait, what).arrange(RIGHT, buff=0.62, aligned_edge=DOWN)
 
 
@@ -727,7 +1009,7 @@ class WaitwhatIntro(Scene):
     """~1.7 s opening sting: the wordmark draws itself on, like pencil on a blackboard, then clears."""
 
     def construct(self):
-        self.camera.background_color = BG
+        self.camera.background_color = "#000000"
         mark = brand_wordmark(1.6)
         if mark is not None:
             self.play(LaggedStart(*[Create(s, rate_func=ease_out) for s in mark], lag_ratio=0.12), run_time=1.15)
@@ -735,7 +1017,7 @@ class WaitwhatIntro(Scene):
             self.play(FadeOut(mark, scale=1.03), run_time=0.25)
             return
         mark = _typeset_wordmark(84).move_to(ORIGIN)
-        loop = pencil_circle(mark[1], buff=0.28, seed=7, stroke=6)
+        loop = pencil_circle(mark[1], color="#FFFF00", buff=0.28, seed=7, stroke=6)
         self.play(FadeIn(mark[0], shift=UP * 0.12, scale=0.96, rate_func=ease_out), run_time=0.35)
         self.play(FadeIn(mark[1], shift=UP * 0.12, scale=0.96, rate_func=ease_out), run_time=0.3)
         self.play(Create(loop, rate_func=ease_out), run_time=0.45)
@@ -747,11 +1029,11 @@ class WaitwhatOutro(Scene):
     """~2.4 s closing sting: the wordmark, a quiet credit line, fade to black."""
 
     def construct(self):
-        self.camera.background_color = BG
+        self.camera.background_color = "#000000"
         mark = brand_wordmark(1.2)
         if mark is None:
             mark = _typeset_wordmark(64).move_to(ORIGIN)
-        sub = Text("made with waitwhat", font=FONT, font_size=SIZE_SMALL, color=INK_3).next_to(mark, DOWN, buff=0.6)
+        sub = Text("made with waitwhat", font=FONT, font_size=SIZE_SMALL, color="#777777").next_to(mark, DOWN, buff=0.6)
         self.play(FadeIn(mark, shift=UP * 0.12, scale=0.96, rate_func=ease_out), run_time=0.5)
         self.play(FadeIn(sub, rate_func=ease_out), run_time=0.5)
         self.wait(0.9)

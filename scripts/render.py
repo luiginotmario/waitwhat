@@ -9,6 +9,7 @@
 
 Per scene it writes:
   renders/<id>.mp4 + renders/<id>.json   (hash, duration, quality); previews go to previews/ instead,
+  renders/<id>.cues.json                 sound-effect cues the scene logged (mixed by stitch.py)
                                          so a preview never replaces a final render
   frames/<id>_1.jpg … and frames/<id>_sheet.jpg   (look at the sheet! from the latest render, either kind)
   logs/<id>.render.log                   (full manim output; on failure the traceback is printed)
@@ -91,7 +92,7 @@ def content_hash(ws: Path, sid: str, quality: str, fps: int) -> str:
     h.update(f"{quality}{fps}".encode())
     code_files = [ws / "scenes" / f"{sid}.py", *sorted((ws / "scenes").glob("shared*.py"))]
     code_text = ""
-    for p in [*code_files, LIB / "waitwhat_style.py", ws / "audio" / f"{sid}.json"]:
+    for p in [*code_files, *sorted(LIB.glob("*.py")), ws / "audio" / f"{sid}.json"]:
         if p.exists():
             data = p.read_bytes()
             h.update(data)
@@ -104,7 +105,10 @@ def content_hash(ws: Path, sid: str, quality: str, fps: int) -> str:
             pal = {k: v for k, v in (plan.get("palette") or {}).items()
                    if f'"{k}"' in code_text or f"'{k}'" in code_text}
             entry = [s for s in plan.get("scenes", []) if s.get("id") == sid]
-            h.update(json.dumps([pal, entry], sort_keys=True).encode())
+            # the theme repaints every pixel; the title seeds its background texture
+            look = [plan.get("theme"), plan.get("title") if plan.get("theme") else None,
+                    os.environ.get("WAITWHAT_THEME")]
+            h.update(json.dumps([pal, entry, look], sort_keys=True).encode())
         except Exception:
             h.update(plan_f.read_bytes())
     return h.hexdigest()[:16]
@@ -240,6 +244,7 @@ def render_one(ws: Path, sid: str, quality: str, fps: int, force: bool, nframes:
     cls = scene_class(src)
     media = ws / ".media" / sid
     shutil.rmtree(media, ignore_errors=True)
+    (ws / "logs" / f"{sid}.cues.json").unlink(missing_ok=True)
     cmd = [str(VENV_BIN / "manim"), "render", QUALITY[quality], "--fps", str(fps), "--disable_caching",
            "--media_dir", str(media), "-o", sid, str(src), cls]
     t0 = time.time()
@@ -259,6 +264,11 @@ def render_one(ws: Path, sid: str, quality: str, fps: int, force: bool, nframes:
         return {"id": sid, "ok": False, "seconds": round(time.time() - t0, 1), "error": err}
     out_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(produced[-1], mp4_out)
+    cues_src, cues_out = ws / "logs" / f"{sid}.cues.json", out_dir / f"{sid}.cues.json"
+    if cues_src.exists():  # sound-effect cues logged by the scene, mixed by stitch.py
+        shutil.copy2(cues_src, cues_out)
+    else:
+        cues_out.unlink(missing_ok=True)
     shutil.rmtree(media, ignore_errors=True)
     dur = ffprobe_duration(mp4_out)
     meta_f.write_text(json.dumps({"hash": h, "duration": dur, "quality": quality, "fps": fps,
@@ -279,6 +289,10 @@ def render_one(ws: Path, sid: str, quality: str, fps: int, force: bool, nframes:
                 res["warning"] = f"video ({dur:.1f}s) is shorter than its narration ({L['narration_end']:.1f}s); call self.finish()"
         except Exception:
             pass
+    try:
+        res["sfx_cues"] = len(json.loads(cues_out.read_text())["cues"]) if cues_out.exists() else 0
+    except Exception:
+        pass
     if note:
         res["warning"] = f"{res['warning']}; {note}" if res.get("warning") else note
     if nframes:
@@ -290,6 +304,8 @@ def render_one(ws: Path, sid: str, quality: str, fps: int, force: bool, nframes:
 def render_stings(ws: Path) -> dict:
     src = (LIB / "waitwhat_style.py").read_bytes()
     key = hashlib.sha256(src).hexdigest()[:12]
+    env = toolchain_env(ws)
+    env["WAITWHAT_THEME"] = "classic"  # the brand stings are always on black
     cache = ROOT / ".cache" / "stings" / key
     if not (cache / "Intro.mp4").exists() or not (cache / "Outro.mp4").exists():
         cache.mkdir(parents=True, exist_ok=True)
@@ -298,7 +314,7 @@ def render_stings(ws: Path) -> dict:
                      "class Outro(WaitwhatOutro):\n    pass\n")
         proc = subprocess.run([str(VENV_BIN / "manim"), "render", "-qh", "--fps", "30", "--disable_caching",
                                "--media_dir", str(cache / "media"), str(f), "Intro", "Outro"],
-                              cwd=cache, env=toolchain_env(ws), capture_output=True, text=True)
+                              cwd=cache, env=env, capture_output=True, text=True)
         if proc.returncode != 0:
             return {"ok": False, "error": summarize_failure(proc.stdout + proc.stderr)}
         for name in ("Intro", "Outro"):

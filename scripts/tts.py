@@ -13,8 +13,9 @@ Narration markup (inside plan.json scenes[].narration):
   <bookmark tag="curious"/>    an Eleven v3/v4 audio tag ([curious]) spoken into the audio only;
                                dropped for other models. Can share a bookmark: mark="x" tag="softly"
   <break time="0.8s"/>         a deliberate pause (v3/v4 get "…", [pause] or [long pause] instead)
-Per-scene delivery: scenes[].voice may override stability / similarity_boost / style / speed /
-max_pause. After synthesis, natural pauses over 0.3 s are compressed (to 0.3 s + 35% of the
+Per-scene delivery: scenes[].energy ("high" | "medium" | "low" | "reveal" | "close") picks a delivery
+preset (ENERGY below: steadier and slower for low/close, livelier for high/reveal), and
+scenes[].voice may override stability / similarity_boost / style / speed / max_pause on top. After synthesis, natural pauses over 0.3 s are compressed (to 0.3 s + 35% of the
 excess, at most voice.max_pause, default 0.7 s) and word times shifted to match; pauses written as
 <break/> are kept. Set max_pause to 0 to leave the audio untouched.
 
@@ -96,6 +97,27 @@ DEFAULTS = {
     "say_voice": "Daniel",
     "say_rate": 182,
 }
+# Energy arc presets (scenes[].energy). Speed is relative to the video's voice speed, so the pace
+# stays near the 190-205 wpm target; v3/v4 ignore style/speed and keep only stability.
+ENERGY = {
+    "high":   {"stability": 0.38, "style": 0.28, "speed_delta": 0.02},
+    "medium": {},
+    "low":    {"stability": 0.55, "style": 0.10, "speed_delta": -0.06},
+    "reveal": {"stability": 0.35, "style": 0.32, "speed_delta": -0.02},
+    "close":  {"stability": 0.55, "style": 0.10, "speed_delta": -0.05},
+}
+
+
+def energy_settings(voice: dict, energy: str | None) -> dict:
+    preset = ENERGY.get(str(energy or "").strip().lower())
+    if not preset:
+        return {}
+    out = {k: v for k, v in preset.items() if k != "speed_delta"}
+    if "speed_delta" in preset:
+        out["speed"] = round(float(voice.get("speed", DEFAULTS["speed"])) + preset["speed_delta"], 2)
+    return out
+
+
 DEFAULT_VOICE = "brian"                     # deep, resonant American narrator (premade)
 DEFAULT_VOICE_ID = "nPczCjzI2devNBz1zQrb"   # the same voice by ElevenLabs id (direct API)
 # Premade voices OpenRouter accepts by name (GET /api/v1/models?output_modalities=speech →
@@ -1111,7 +1133,8 @@ def todo(ws: Path, plan: dict, voice: dict, backend: str, pron: dict, only: list
         if only and sid not in only:
             continue
         narration = sc.get("narration", "").strip()
-        sv = {**voice, **{k: v for k, v in (sc.get("voice") or {}).items() if k in (*SETTINGS, "max_pause")}}
+        sv = {**voice, **energy_settings(voice, sc.get("energy")),
+              **{k: v for k, v in (sc.get("voice") or {}).items() if k in (*SETTINGS, "max_pause")}}
         vkey = {k: sv.get(k) for k in sorted(sv) if k != "backend"}
         sha = hashlib.sha256(json.dumps([narration, backend, vkey, pron], sort_keys=True).encode()).hexdigest()[:16]
         jf, wf = ws / "audio" / f"{sid}.json", ws / "audio" / f"{sid}.wav"

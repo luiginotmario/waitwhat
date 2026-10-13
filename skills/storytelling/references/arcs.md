@@ -35,8 +35,30 @@ solved it, and the new problem that idea created. Anchor everything on one persi
 Start from an everyday observation, walk the causal chain one link per scene with a persistent
 flow diagram that grows, then show a feedback loop or a surprising downstream effect.
 
+## Founding story → how it works (companies, inventions, discoveries)
+When the subject has a real origin story, open with it and hang the explanation on it.
+1. The protagonist and the moment: who, where, what they were trying to do.
+2. The pain, concrete: what it cost them (and everyone like them). This is the *but*.
+3. What people did before, and why it was not enough.
+4. The turning point: the insight or the hack, in one picture.
+5. How it works, now that the viewer cares: the mechanism, as deep as the audience level needs.
+6. What it grew into (only verifiable numbers), and one surprising consequence.
+7. Echo the opening moment, changed by what we now know.
+
+*Example: "What does stripe.com do?"* (outline shape only; verify every fact first)
+two brothers trying to sell software online, and the weeks of paperwork a merchant account
+took → why accepting a card is hard (the card network, the banks, a payment processor in between,
+each term explained as it appears) → the turning point: a few lines of code instead of weeks →
+follow one payment from "Pay" to the money arriving → how they make money → who uses it → back
+to the developer, the button now one paste away.
+
+For the *but*, use "and, but, therefore": situation and situation, **but** a tension, **therefore**
+a consequence. If a topic has no real conflict, use a turn instead (introduce, develop, twist,
+reconcile) rather than inventing one.
+
 ## Company explainer (see waitwhat:research for the research half)
-1. An everyday problem, shown concretely (a person, a moment, a cost).
+1. An everyday problem, shown concretely (a person, a moment, a cost). If the founders' own
+   story is documented, that person is the founder (see the founding-story arc above).
 2. Why it is hard / what people do today.  3. What the company built, in one sentence.
 4. A concrete example walked end to end (a real use case from their site).
 5. How it works underneath (only as deep as helps).  6. How they make money.

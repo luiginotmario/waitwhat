@@ -82,26 +82,36 @@ usual failure, so direct it.
   clause, or set off by a comma or a full stop ("they hold as much area. Exactly as much.").
   Don't use capitals or asterisks; they leak into the on-screen text and the manifest.
 - **Energy follows the arc.** The hook is curious and bright. The scene before the insight is
-  slower and softer. The reveal lifts. The close is calm. Set this per scene with
-  `scenes[].voice` overrides:
+  slower and softer. The reveal lifts. The close is calm. Set it per scene with
+  `scenes[].energy`; `tts.py` turns it into voice settings (speed relative to the video's voice,
+  so the pace stays in the 190–205 wpm band), and the scene builders pace the animation to it:
 
-  | Beat | `scenes[].voice` |
-  | --- | --- |
-  | hook | `{"stability": 0.4, "style": 0.25}` |
-  | just before the insight | `{"stability": 0.55, "speed": 1.04}` |
-  | reveal | `{"stability": 0.35, "style": 0.3}` |
-  | close | `{"stability": 0.55, "style": 0.1, "speed": 1.06}` |
+  | Beat | `scenes[].energy` | what it sets |
+  | --- | --- | --- |
+  | hook, turning point | `high` | stability 0.38, style 0.28, speed +0.02 |
+  | steady explaining | `medium` (default) | the video's voice settings |
+  | just before the insight, serious beats | `low` | stability 0.55, style 0.1, speed −0.06 |
+  | the reveal | `reveal` | stability 0.35, style 0.32, speed −0.02 |
+  | the close | `close` | stability 0.55, style 0.1, speed −0.05 |
+
+  `scenes[].voice` still overrides individual settings on top. Vary it: a run of identical
+  energies sounds like reading.
 
   Inside a scene, slow down only the one key sentence: keep it short and give it its own full
   stop. Let the connective sentences around it run on with commas.
 - **Think aloud, sparingly**: one or two lines per video ("Wait, why would that be true?", "Hm.
   That can't be a coincidence."), never more than one per scene.
-- **Audio tags (v4 only).** Put a tag in a bookmark, so it reaches the audio but never the
-  screen: `<bookmark tag="curious"/>`, `<bookmark mark="reveal" tag="excited"/>`. Use at most 1–2
-  per scene, never on every line. `curious`, `thoughtful`, `excited` and `whispers` are acted,
-  not read out. Other models ignore tags.
+- **Audio tags (v3/v4 only).** The default narrator, multilingual-v2, does not act inline tags
+  (they are dropped), so with it, delivery comes from `energy`, punctuation and sentence shape.
+  Only if you chose `eleven-v4` for a slow, intimate piece: put a tag in a bookmark, so it reaches
+  the audio but never the screen: `<bookmark tag="curious"/>`, `<bookmark mark="reveal"
+  tag="excited"/>`, at most 1–2 per scene. Write tags as short voice directions (`curious`,
+  `thoughtful`, `softly, with wonder`); v4 can mistake a noun-like tag for a sound effect.
+- **Emphasis without markup.** Stress comes from position: put the key word last in a short
+  sentence or set it off with a comma, and let a short line follow a long one ("Seven lines.
+  That's it."). Spell numbers the way they're said.
 
-Hook, multilingual-v2, with `"voice": {"stability": 0.4, "style": 0.25}`:
+Hook, multilingual-v2, with `"energy": "high"`:
 
 ```
 Draw any right triangle, and build a square on each side. Here is the strange part:

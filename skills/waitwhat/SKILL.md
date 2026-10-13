@@ -78,10 +78,13 @@ Write into `workspace/plan.json` (schema in `references/job-contract.md`):
   (`plan.question` if present). Pick the most interesting honest version of the request.
   "Explain transformers" becomes "How can predicting the next word produce something that seems
   to reason?"
-- **Audience and depth** (`plan.audience` if present). Default: a smart adult with no special
-  background. Read cues: "like I'm 10" means no jargon, every term earned (it is not a kids'
-  show: same respect, simpler words); "for engineers" or a technical attachment means you can use
-  notation, but you still build intuition first.
+- **Audience and depth** (`plan.audience` if present; it starts with the level: `newcomer`,
+  `intermediate` or `expert`). If you plan yourself, read the asker's vocabulary
+  (`references/planning.md`, "Read the asker"): precise jargon ("idempotency keys", "PSP", "KV
+  cache") means an expert who wants depth and pace, so skip the basics they already used in
+  their question; vague, everyday wording means a newcomer, so start high-level and intuitive
+  and go progressively deeper. "Like I'm 10" means no jargon, every term earned (same respect,
+  simpler words). Either way every technical term is explained in place, the first time it's said.
 - **Length**: what the outline needs, about `est_minutes`. Respect explicit asks. If the job
   prompt states a **free preview limit**, stay within it (it is a soft ceiling: ±15%), and keep
   the plan's focus; don't quietly add deferred material back.
@@ -94,10 +97,25 @@ customers; if you cannot verify something, leave it out.
 
 Load `waitwhat:storytelling` and write the scene plan from the outline: walk the outline in
 order and give each item as many scenes as it needs (usually one to three; a prerequisite can be
-a single short scene). Each scene has one job, a narration draft, a storyboard line, its concept
-colours, how it hands off to the next scene, and `covers`: the 1-based outline items it serves.
+a single short scene). When the subject has a real story (a company, a discovery, an invention,
+a historical turn), tell it as one: a real protagonist with a problem, what was at stake, the
+turning point, then the idea, all from verified sources.
+
+Each scene has one job, a narration draft, a storyboard line, its concept colours, how it hands
+off to the next scene, and `covers`: the 1-based outline items it serves.
 Every outline item must be covered by at least one scene; `ww progress plan` warns about any that
-aren't. Narration comes first and drives everything else. Read the whole narration aloud in your
+aren't. Give every scene an `energy` (`high`, `medium`, `low`, `reveal`, `close`) so the video has
+an arc instead of one flat level: a bright hook, steady build-up, a hush before the insight, a
+lift at the reveal, a calm close.
+
+**Choose the world** (`plan.theme`): one theme for the whole video, matched to the topic (the
+table is in the style guide): `classic` black for math and abstract ideas (the default),
+`chalkboard` for lessons and derivations, `blueprint` for machines and systems, `space` for
+astronomy and scale, `ocean` for life and flows, `paper` or `hills` for stories and history,
+`studio`, `city` or `whiteboard` for companies, products and business, `graph_paper` for data.
+Switch per scene (`scenes[].theme`) only when the story itself moves to another place.
+
+Narration comes first and drives everything else. Read the whole narration aloud in your
 head: if a sentence would sound odd spoken by a person, rewrite it. Check the total narration
 against `duration_target` (≈190 words per minute); if you are far off, revisit the scope, not the
 speaking pace.
@@ -148,7 +166,8 @@ Length is not a reason to cut corners, but your own context is finite, so delega
 
 ## 7. Sound, stitch, check
 
-Load `waitwhat:sound` for the music mood and transitions (usually just `plan.sound`). Then
+Load `waitwhat:sound` for the music mood and effects (usually just `plan.sound`; the scenes
+log their own sound cues, and each brief names the few moments that deserve a chosen sound). Then
 `ww stitch` → `out/`. Watch for problems: extract a few frames across the final video, check the
 thumbnail, and run `ww check`. Then `ww progress stage done "Your video is ready"`.
 

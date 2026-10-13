@@ -27,12 +27,15 @@ stay inside your own files.
 1. `ww progress scene <id> rendering`, then write `workspace/scenes/<id>.py`: one
    `WaitwhatScene` subclass, `from waitwhat_style import *`, shared objects imported from
    `shared.py`, timing from bookmarks (`self.until`, `self.wait_until`, `self.play_until`), and
-   `self.finish()` at the end (`fade=True` if the next scene is a `cut`).
+   `self.finish()` at the end (`fade=True` if the next scene is a `cut`). Colours by name only
+   (the video's theme sets their values). Give the brief's sound moments their cue
+   (`sfx="coin"`, `self.sfx("chime", at="reveal")`); appear/write/draw/erase sounds are automatic.
+   Pace to the scene's `energy`: every stressed word gets a visual beat, no still frame over ~3 s.
 2. `ww render <id> --preview`: a fast 480p15 render (a few seconds) plus a contact sheet. On a
    traceback, fix the cause. At most 3 failed attempts; then simplify the visual (fewer
    objects, plain `T(...)` instead of tricky LaTeX, no updater) and say so in your reply.
 3. Look: Read `workspace/frames/<id>_sheet.jpg` (3 frames, top to bottom in time) and the
-   JSON line (`layout_issues`, `missing_marks`, `warning`). Fix anything that fails the visual
+   JSON line (`layout_issues`, `missing_marks`, `warning`, `sfx_cues`). Fix anything that fails the visual
    checklist (cut off, overlapping, tiny text, label far from its object, empty or cluttered
    frame, colour off-palette, wrong moment for the words, slide-deck look, handoff frames that
    don't match the neighbours) and preview again. One or two look-and-fix rounds is normal;

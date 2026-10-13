@@ -21,7 +21,36 @@ transformers from scratch" may need fifteen or more. Length follows the material
   depth, a requested length, language, focus ("just the intuition", "with the math"), things to
   skip.
 
-## 2. Find the implied prerequisites
+## 2. Read the asker: who is this for?
+
+The words someone uses tell you what they already know. Decide the level before anything else,
+because it changes which prerequisites exist, how fast the video moves and how deep it ends.
+
+- **Expert**: precise technical terms used correctly ("idempotency keys", "PSP", "KV cache",
+  "eigenvalues of the Hessian", "Raft vs Paxos"), or a technical attachment. They want depth and
+  pace: skip what their own question already takes for granted, use the precise terms, spend
+  the time on mechanisms, trade-offs, edge cases and the subtle part. Still intuition first,
+  just faster.
+- **Intermediate**: some field vocabulary, used loosely ("how does Stripe handle payments
+  under the hood?"). Brief refreshers, then real mechanism.
+- **Newcomer**: vague or everyday wording ("what does stripe.com do?", "how do computers think?").
+  Start high-level and intuitive, with a concrete everyday picture, then go progressively deeper
+  through the video, so the last chapters reach real substance.
+
+Every technical term that appears is explained in place, in a clause, the first time it is
+said, at every level. Write the level first in `audience`, then who and how deep, e.g.
+`"expert: payments engineer; skip what a PSP is, go deep on retries and idempotency"` or
+`"newcomer: curious adult, no payments background; intuitive start, ends at how a charge flows"`.
+
+**When the subject has a story, plan it as one.** Companies, inventions, discoveries and
+historical turns are best told through a real protagonist with a real problem: who they were,
+what hurt, what was at stake, the turning point, and how the idea solved it (Stripe: two
+brothers, the pain of accepting payments online, seven lines of code). Make the story the
+spine of the outline (the first item is usually the protagonist's problem), with the technical
+items hung on it. Every fact in the story must be verifiable; if you can't verify the story,
+tell the problem instead of inventing one.
+
+## 3. Find the implied prerequisites
 
 A viewer can only follow a step if they already have what it stands on. For each asked topic,
 ask: what would a smart newcomer (or the stated audience) need first? Include those
@@ -34,10 +63,11 @@ prerequisites as their own outline items, placed before the step that uses them.
 - "Why does ice float?" implies: density (what floats means), how water molecules bond
   (hydrogen bonds), and why the solid's open lattice is less dense than the liquid.
 - Skip prerequisites the audience clearly already has (an engineer asking about attention
-  does not need "what is a vector").
+  does not need "what is a vector"). For an expert, the prerequisites are usually the subtle
+  pieces, not the basics.
 - Do not pad. A tangent the request doesn't need is a cost, not a bonus.
 
-## 3. Order the explanation
+## 4. Order the explanation
 
 Order the outline the way the explanation should unfold: hook and the question first, then
 prerequisites just before they're needed, building to the main idea, then consequences or
@@ -45,7 +75,7 @@ applications if asked for. Each outline item is one coherent chunk of the explan
 one to three scenes later), with a title a viewer would understand and a one-sentence summary of
 what it establishes.
 
-## 4. Estimate the duration
+## 5. Estimate the duration
 
 Narration runs about 190 words per minute. Budget roughly:
 - the hook and the question: 0.3 to 0.5 min,
@@ -57,7 +87,7 @@ Narration runs about 190 words per minute. Budget roughly:
 subject gets a long estimate. If the person asked for a specific length, plan to that length and
 scope the outline to fit it.
 
-## 5. The free preview (only when the run context says so)
+## 6. The free preview (only when the run context says so)
 
 If the context says this is a **free preview with a limit of N minutes**, the video must fit in
 about N minutes. Prioritise the core of what was asked (the thing they'd be most disappointed to
@@ -67,7 +97,7 @@ miss), keep only the prerequisites that core can't stand without, and move the r
 empty string and `deferred` is empty. Without that context there is no limit: never shorten a
 plan to save money, the person pays for what the video actually costs.
 
-## 6. Questions: almost never
+## 7. Questions: almost never
 
 Default to **covering, not asking**. A follow-up costs the person a round trip; a richer video
 answers what they would have chosen *and* what they didn't know to ask.
@@ -97,7 +127,7 @@ never to confirm what they plainly said. When in doubt: don't ask, cover it.
 If `answers` are present, or the context says the person chose "Just go", you **must** return
 a plan, never more questions. Use the answers; for skipped ones, cover the most useful reading(s).
 
-## 7. Output
+## 8. Output
 
 Return exactly one JSON object:
 
@@ -108,7 +138,7 @@ Return exactly one JSON object:
   "plan": {
     "title": "How a transformer turns words into the next word",
     "est_minutes": 14,
-    "audience": "curious adult who has heard of ChatGPT, no ML background",
+    "audience": "newcomer: curious adult who has heard of ChatGPT, no ML background",
     "question": "How can predicting the next word produce something that seems to reason?",
     "asked": ["what a transformer is", "how attention works", "from scratch"],
     "outline": [
@@ -137,7 +167,8 @@ Field rules:
 - `title`: the video's title, at most about 60 characters, specific and inviting, not "An
   explainer on X".
 - `est_minutes`: number (half-minute steps).
-- `audience`: who it's for and at what depth, one line.
+- `audience`: the level (`newcomer`, `intermediate` or `expert`, read from the asker's
+  vocabulary, see 2), a colon, then who it's for and how deep, one line.
 - `question`: the one question the whole video answers, in a curious viewer's words.
 - `asked`: every topic, question or constraint the person explicitly asked for, as short phrases
   (their words where possible). Every entry must be covered by at least one outline item (or, in
@@ -145,7 +176,7 @@ Field rules:
 - `outline`: the ordered checklist, typically 3 to 20 items (more for a very broad request). Each
   `title` at most about 60 characters; each `summary` one sentence saying what that part
   establishes.
-- `note`: "" unless it's a free preview that had to drop material (see 5).
+- `note`: "" unless it's a free preview that had to drop material (see 6).
 - `deferred`: what a free preview left for later (short phrases), else [].
 
 ## Using this file inside a video job (agent instructions)

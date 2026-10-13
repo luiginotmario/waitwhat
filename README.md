@@ -1,8 +1,12 @@
 # waitwhat
 
 Type a question, attach a paper, or paste a company URL, and get back a narrated, animated
-explainer video in the classic dark-background math-animation style: geometry that moves, colours
-that mean something, a calm voice, a quiet music bed, one mp4.
+explainer video in the classic math-animation style: geometry that moves, colours that mean
+something, a voice whose energy follows the story, a quiet music bed and small sounds tied to
+what happens on screen, one mp4. Each video picks a world to live in: classic black for math,
+or a chalkboard, blueprint, notebook paper, night sky, deep ocean, city or whiteboard when the
+topic calls for it. Depth follows the way you ask: use the jargon and it goes deep and fast;
+ask plainly and it starts simple and builds up.
 
 Watching and something doesn't click? Pause, circle it, type **"wait, what?"**. waitwhat works
 out what you meant and rebuilds that part of the video as a new version.
@@ -69,7 +73,12 @@ point of the next refine. `scripts/ww check <job>` validates the outputs. Full d
 ## Tools
 
 `scripts/ww <command>`: `setup`, `new`, `progress`, `tts`, `render`, `stitch`, `fetch`, `music`,
-`refine`, `check`, `manim`. Each script has `--help`.
+`sfx`, `refine`, `check`, `manim`. Each script has `--help`.
+
+Sound effects come from a small curated library in `assets/sfx/` (generated once; see
+THIRD_PARTY.md), so a video costs nothing extra for them. Themes live in
+`skills/manim-scenes/lib/waitwhat_themes.py`; `python waitwhat_themes.py <dir>` checks every
+palette's contrast and writes a preview of each background.
 
 ## Licence
 

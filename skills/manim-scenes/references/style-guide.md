@@ -10,10 +10,47 @@ re-deriving values, so all scenes match.
 ## Frame
 - 16:9, 14.22 × 8 units, origin at centre. Safe area: |x| ≤ 6.5, |y| ≤ 3.5. Keep text ≥ 0.5 units
   from every edge (the lib's layout lint flags anything closer).
-- Background `#000000` (set by `WaitwhatScene`). No vignettes, gradients or textures.
-  `grid_paper()` is allowed as a very faint backdrop for "workbench" scenes.
+- The background is the video's **theme** (`plan.theme`), painted by `WaitwhatScene` behind
+  everything; it is not a mobject, so fades and `self.clear()` never touch it. Never draw your
+  own full-frame background. `grid_paper()` is still allowed as a faint "workbench" backdrop on
+  `classic`.
+
+## Themes (worlds)
+
+One theme per video, chosen by the director for the topic; a scene may override it only when the
+story moves to another place (`scenes[].theme`). The palette constants (`INK`, `INK_2`, `BLUE`,
+`YELLOW`, ...) and `color_of()` already hold the current theme's values, with contrast checked
+against its background, so **use names, never hex**. Plain `Text`, `MathTex`, `Line`, `Square`
+etc. default to the theme's ink. `IS_DARK`, `THEME` and `FLOOR_Y` tell you where you are.
+
+| Theme | World | Good for |
+| --- | --- | --- |
+| `classic` | pure black, the 3b1b look (default) | math, proofs, abstract ideas |
+| `studio` | warm charcoal, soft spotlight | products, companies, modern tech |
+| `chalkboard` | green slate, chalk dust; pen sound is chalk | derivations, lessons, history of science |
+| `blueprint` | blue drafting sheet with a grid | machines, systems, architecture, how things are built |
+| `space` | night sky, faint nebula, twinkling stars | astronomy, physics, scale, big ideas |
+| `ocean` | deep water, light rays, drifting particles | biology, oceans, flows, calm deep dives |
+| `city` | night skyline along the bottom | startups, economics, people and places |
+| `whiteboard` | clean board, marker colours; pen sound is marker | business, product walkthroughs |
+| `graph_paper` | light grid on whole/half units | data, measurement, geometry |
+| `paper` | warm notebook, ruled lines | stories, biographies, history, gentle intros |
+| `hills` | illustrated daytime sky, clouds, hills | nature, everyday life, stories for everyone |
+
+- `city` and `hills` draw scenery along the bottom: keep content above `FLOOR_Y` (−2.6).
+- On light themes (`whiteboard`, `graph_paper`, `paper`, `hills`) the attention colour `YELLOW`
+  is a deep amber and concept colours are marker-dark; fills at 0.3–0.5 read well.
+- `plan.theme` may also be `{"name": "space", "ambient": false}` (no background motion), or
+  carry a `backdrop` image under the theme, cover-fitted, blurred and dimmed
+  (`{"name": "studio", "backdrop": "backdrop.png", "backdrop_dim": 0.72}`, path relative to
+  `workspace/`). The director can paint one with `ww backdrop "<a place or era, no text>"`
+  (one OpenRouter image, a few cents). Use it rarely: only when a real place or era carries the
+  story and no procedural theme fits; procedural themes are the default.
 
 ## Colour
+
+Values below are `classic`; other themes adapt them (same names, same meanings), so write names
+(`"BLUE"`) in `plan.palette`, not hex.
 
 | Name | Hex | Default meaning |
 | --- | --- | --- |
@@ -68,6 +105,36 @@ re-deriving values, so all scenes match.
   an axis-aligned box. One emphasis at a time.
 - Rhythm: after a reveal, hold (`self.wait(1–2)`) while the narration lands. Silence with a strong
   picture is part of the style.
+
+## Alive, not busy
+
+- **See, then hear.** The visual for a word lands on its bookmark or a beat before it, never
+  after. Mark the stressed word of each key sentence and give it a visual beat: something
+  appears, moves, changes colour, or `beat(mob)` (a quick swell). Roughly every 3–5 s of
+  narration something on screen should change in a way that means something.
+- **No dead frames.** Under narration, never hold a completely still frame for more than ~3 s;
+  move the story forward (stage a reveal, tick a number, draw the next arrow). Ambient themes
+  (`space`, `ocean`, `city`, `hills`) keep the background breathing on their own. Don't add
+  meaningless wobble or floating to objects: motion should explain.
+- **Tempo follows energy** (`scenes[].energy` in the plan): `high` scenes use snappier
+  entrances (0.4–0.8 s) and more beats; `low`/`close` scenes use slower moves and longer holds;
+  `reveal` gets the longest build and a held picture afterwards.
+- **Vary the entrances** between scenes (grow from a point, draw on, slide in from where it
+  comes from, transform from the previous object) so the video doesn't fall into one rhythm.
+
+## Sound cues
+
+Sound is logged from the animations themselves (`ww stitch` mixes it under the voice):
+- automatic: appear → soft pop (a staggered group → ticks), `Write` → the theme's pen,
+  `Create` → a quieter stroke, `erase(...)`/`Uncreate` → eraser, typing → keys. Moves, fades
+  out and highlights are silent.
+- chosen: `self.play(anim, sfx="coin")`, `sfx="chime@end"`, `sfx="swish@mid"`,
+  `sfx="rise@reveal"` (a bookmark), a list of those, or `sfx=False` for silence;
+  `self.sfx("stamp", at="approved")` for a moment between plays.
+- Names: `SFX` in the lib (pop tick click pencil chalk marker eraser whoosh swish rise chime
+  shimmer coin register keys paper thud stamp notify wrong). Give meaning, not decoration: a coin
+  when money moves, a chime once at the aha, keys when code runs. One chosen sound per beat.
+
 - Live numbers: `ValueTracker` + `always_redraw` / `DecimalNumber` updaters for anything that
   changes continuously. Show real values, not placeholders.
 

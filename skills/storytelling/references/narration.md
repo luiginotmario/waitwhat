@@ -58,6 +58,14 @@ purpose, not as tics.
 | "Company X is a leading provider of innovative payroll solutions." | "Paying twelve people in four countries used to take Maria two full days every month, and most of that time went into one spreadsheet nobody trusted." |
 | "Attention. Queries. Keys. Values. Let's define each." | "Each word gets to ask a question of every other word, and how well their answers match decides how much each one gets listened to." |
 
+## Terms: name it, then say what it is
+Introduce a technical term and explain it in the same sentence, the first time it's spoken:
+"the card network, the system Visa and Mastercard run that connects every bank to every other",
+"an idempotency key, a label that makes sure a retried request is only charged once". Put the
+term on screen as a label on its picture; let the voice carry the meaning. For an expert
+audience the explanation can be a short clause; for a newcomer it can be a picture and a
+sentence. Never stack two new terms in one sentence.
+
 ## Pace and pauses
 - Narrate at about **190 words per minute**, a lively conversational pace (the voice skill's
   default speed of 1.12 lands here; 1.0 is noticeably slower). A 20 s scene holds about 60 to 65 words.

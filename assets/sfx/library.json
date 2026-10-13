@@ -1,0 +1,483 @@
+{
+ "source": "ElevenLabs Sound Effects API (eleven_text_to_sound_v2), generated once on a paid plan with a commercial licence; trimmed and loudness-matched by scripts/sfx_library.py",
+ "sample_rate": 48000,
+ "level": "RMS of the active part -20 dBFS, peak <= -1 dBFS",
+ "sounds": {
+  "pop": {
+   "kind": "hit",
+   "gain_db": -13,
+   "use": "an object appears",
+   "takes": [
+    {
+     "file": "pop_1.wav",
+     "seconds": 0.23,
+     "onset": 0.0,
+     "prompt": "a single soft muted pop, like a tiny bubble bursting"
+    },
+    {
+     "file": "pop_2.wav",
+     "seconds": 0.48,
+     "onset": 0.0,
+     "prompt": "a gentle soft pop, a small cork leaving a bottle, very short"
+    },
+    {
+     "file": "pop_3.wav",
+     "seconds": 0.18,
+     "onset": 0.025,
+     "prompt": "a soft round plop, a single drop, muted and warm"
+    },
+    {
+     "file": "pop_4.wav",
+     "seconds": 0.48,
+     "onset": 0.005,
+     "prompt": "a light soft pop of a small balloon, quiet, short"
+    }
+   ]
+  },
+  "tick": {
+   "kind": "hit",
+   "gain_db": -15,
+   "use": "small items in a list, counting",
+   "takes": [
+    {
+     "file": "tick_1.wav",
+     "seconds": 0.48,
+     "onset": 0.0,
+     "prompt": "a single tiny soft wooden tick, very short"
+    },
+    {
+     "file": "tick_2.wav",
+     "seconds": 0.425,
+     "onset": 0.32,
+     "prompt": "one small soft tap of a pencil on a wooden desk"
+    },
+    {
+     "file": "tick_3.wav",
+     "seconds": 0.165,
+     "onset": 0.065,
+     "prompt": "a tiny soft click of a ballpoint pen, single"
+    }
+   ]
+  },
+  "click": {
+   "kind": "hit",
+   "gain_db": -15,
+   "use": "a UI click, a piece snapping into place",
+   "takes": [
+    {
+     "file": "click_1.wav",
+     "seconds": 0.48,
+     "onset": 0.03,
+     "prompt": "a single soft computer mouse click"
+    },
+    {
+     "file": "click_2.wav",
+     "seconds": 0.3,
+     "onset": 0.025,
+     "prompt": "a small soft plastic snap, two parts clicking together"
+    },
+    {
+     "file": "click_3.wav",
+     "seconds": 0.135,
+     "onset": 0.025,
+     "prompt": "a single soft button press click on a trackpad"
+    }
+   ]
+  },
+  "pencil": {
+   "kind": "texture",
+   "gain_db": -14,
+   "use": "writing or drawing with a pencil",
+   "takes": [
+    {
+     "file": "pencil_1.wav",
+     "seconds": 1.59,
+     "onset": 0.0,
+     "prompt": "a pencil writing a short word on paper, graphite scratching, steady strokes"
+    },
+    {
+     "file": "pencil_2.wav",
+     "seconds": 0.62,
+     "onset": 0.0,
+     "prompt": "a sharp pencil drawing a quick line and a circle on paper"
+    },
+    {
+     "file": "pencil_3.wav",
+     "seconds": 1.55,
+     "onset": 0.0,
+     "prompt": "a pencil sketching quickly on a notepad, light scratchy strokes"
+    },
+    {
+     "file": "pencil_4.wav",
+     "seconds": 1.555,
+     "onset": 0.0,
+     "prompt": "a mechanical pencil writing on paper, soft scratching"
+    }
+   ]
+  },
+  "chalk": {
+   "kind": "texture",
+   "gain_db": -14,
+   "use": "writing on a chalkboard",
+   "takes": [
+    {
+     "file": "chalk_1.wav",
+     "seconds": 1.525,
+     "onset": 0.0,
+     "prompt": "chalk writing quickly on a blackboard, short scratchy strokes"
+    },
+    {
+     "file": "chalk_2.wav",
+     "seconds": 1.33,
+     "onset": 0.0,
+     "prompt": "a piece of chalk drawing a line and tapping on a chalkboard"
+    },
+    {
+     "file": "chalk_3.wav",
+     "seconds": 1.55,
+     "onset": 0.0,
+     "prompt": "writing a short equation in chalk on a slate blackboard"
+    }
+   ]
+  },
+  "marker": {
+   "kind": "texture",
+   "gain_db": -15,
+   "use": "writing on a whiteboard",
+   "takes": [
+    {
+     "file": "marker_1.wav",
+     "seconds": 1.5,
+     "onset": 0.0,
+     "prompt": "a dry erase marker writing quickly on a whiteboard, soft squeaky strokes"
+    },
+    {
+     "file": "marker_2.wav",
+     "seconds": 1.58,
+     "onset": 0.0,
+     "prompt": "a whiteboard marker drawing a line and a circle, felt tip squeak"
+    },
+    {
+     "file": "marker_3.wav",
+     "seconds": 1.6,
+     "onset": 0.0,
+     "prompt": "writing a short word with a marker on a whiteboard"
+    }
+   ]
+  },
+  "eraser": {
+   "kind": "texture",
+   "gain_db": -15,
+   "use": "rubbing something out",
+   "takes": [
+    {
+     "file": "eraser_1.wav",
+     "seconds": 0.98,
+     "onset": 0.0,
+     "prompt": "a felt board eraser rubbing a chalkboard briefly, soft brushing"
+    },
+    {
+     "file": "eraser_2.wav",
+     "seconds": 1.19,
+     "onset": 0.0,
+     "prompt": "a rubber eraser rubbing on paper quickly, short"
+    },
+    {
+     "file": "eraser_3.wav",
+     "seconds": 1.18,
+     "onset": 0.0,
+     "prompt": "wiping a whiteboard with an eraser, two quick soft strokes"
+    }
+   ]
+  },
+  "whoosh": {
+   "kind": "hit",
+   "gain_db": -15,
+   "use": "a scene transition or a big move",
+   "takes": [
+    {
+     "file": "whoosh_1.wav",
+     "seconds": 0.31,
+     "onset": 0.115,
+     "prompt": "a soft airy whoosh transition, smooth and gentle, no impact"
+    },
+    {
+     "file": "whoosh_2.wav",
+     "seconds": 0.7,
+     "onset": 0.235,
+     "prompt": "a subtle cinematic swoosh passing by, airy, soft"
+    },
+    {
+     "file": "whoosh_3.wav",
+     "seconds": 0.72,
+     "onset": 0.18,
+     "prompt": "a gentle wind whoosh, short, smooth rise and fall"
+    },
+    {
+     "file": "whoosh_4.wav",
+     "seconds": 1.0,
+     "onset": 0.13,
+     "prompt": "a soft fabric swish whoosh, quick, airy"
+    }
+   ]
+  },
+  "swish": {
+   "kind": "hit",
+   "gain_db": -18,
+   "use": "a quick small movement, a card sliding",
+   "takes": [
+    {
+     "file": "swish_1.wav",
+     "seconds": 0.435,
+     "onset": 0.09,
+     "prompt": "a very short quick swish of air, subtle"
+    },
+    {
+     "file": "swish_2.wav",
+     "seconds": 0.25,
+     "onset": 0.085,
+     "prompt": "a playing card sliding quickly across a table, short swish"
+    },
+    {
+     "file": "swish_3.wav",
+     "seconds": 0.48,
+     "onset": 0.09,
+     "prompt": "a fast tiny whoosh, a flick of a page"
+    }
+   ]
+  },
+  "rise": {
+   "kind": "hit",
+   "gain_db": -17,
+   "use": "a reveal, something becoming clear",
+   "takes": [
+    {
+     "file": "rise_1.wav",
+     "seconds": 1.3,
+     "onset": 0.54,
+     "prompt": "a gentle short rising shimmer, soft synth swell that resolves, calm reveal"
+    },
+    {
+     "file": "rise_2.wav",
+     "seconds": 1.23,
+     "onset": 0.18,
+     "prompt": "a soft magical upward sweep, airy and warm, short"
+    },
+    {
+     "file": "rise_3.wav",
+     "seconds": 1.6,
+     "onset": 0.895,
+     "prompt": "a quiet rising tone swell, smooth, ending softly"
+    }
+   ]
+  },
+  "chime": {
+   "kind": "hit",
+   "gain_db": -18,
+   "use": "the aha moment, a correct answer",
+   "takes": [
+    {
+     "file": "chime_1.wav",
+     "seconds": 1.48,
+     "onset": 0.0,
+     "prompt": "a single soft glass chime, bright but gentle, short decay"
+    },
+    {
+     "file": "chime_2.wav",
+     "seconds": 1.48,
+     "onset": 0.0,
+     "prompt": "a soft bell ding, warm and clear, single note"
+    },
+    {
+     "file": "chime_3.wav",
+     "seconds": 1.07,
+     "onset": 0.0,
+     "prompt": "a gentle two-note positive chime, soft marimba"
+    }
+   ]
+  },
+  "shimmer": {
+   "kind": "hit",
+   "gain_db": -19,
+   "use": "something special or magical, a glow",
+   "takes": [
+    {
+     "file": "shimmer_1.wav",
+     "seconds": 1.2,
+     "onset": 0.0,
+     "prompt": "a short delicate sparkle shimmer, quiet twinkle"
+    },
+    {
+     "file": "shimmer_2.wav",
+     "seconds": 1.2,
+     "onset": 0.0,
+     "prompt": "a soft magical glitter sound, short and light"
+    }
+   ]
+  },
+  "coin": {
+   "kind": "hit",
+   "gain_db": -15,
+   "use": "money, a price, a fee",
+   "takes": [
+    {
+     "file": "coin_1.wav",
+     "seconds": 0.66,
+     "onset": 0.03,
+     "prompt": "a single coin dropping onto a wooden table, short clink"
+    },
+    {
+     "file": "coin_2.wav",
+     "seconds": 0.685,
+     "onset": 0.11,
+     "prompt": "two coins clinking together once, bright and short"
+    },
+    {
+     "file": "coin_3.wav",
+     "seconds": 0.55,
+     "onset": 0.01,
+     "prompt": "a single coin landing in a ceramic jar, clink"
+    }
+   ]
+  },
+  "register": {
+   "kind": "hit",
+   "gain_db": -16,
+   "use": "a payment going through, a sale",
+   "takes": [
+    {
+     "file": "register_1.wav",
+     "seconds": 1.0,
+     "onset": 0.005,
+     "prompt": "a soft modern payment success chime from a card reader, short"
+    },
+    {
+     "file": "register_2.wav",
+     "seconds": 1.0,
+     "onset": 0.0,
+     "prompt": "a gentle cash register ding, short and soft"
+    }
+   ]
+  },
+  "keys": {
+   "kind": "texture",
+   "gain_db": -16,
+   "use": "typing, code, a request being sent",
+   "takes": [
+    {
+     "file": "keys_1.wav",
+     "seconds": 1.415,
+     "onset": 0.0,
+     "prompt": "fast typing on a laptop keyboard, a short burst of soft keystrokes"
+    },
+    {
+     "file": "keys_2.wav",
+     "seconds": 0.92,
+     "onset": 0.0,
+     "prompt": "a few quick keystrokes on a mechanical keyboard, soft"
+    },
+    {
+     "file": "keys_3.wav",
+     "seconds": 1.41,
+     "onset": 0.0,
+     "prompt": "typing a short line of code on a quiet laptop keyboard"
+    }
+   ]
+  },
+  "paper": {
+   "kind": "hit",
+   "gain_db": -16,
+   "use": "a document, an invoice, a page",
+   "takes": [
+    {
+     "file": "paper_1.wav",
+     "seconds": 0.92,
+     "onset": 0.07,
+     "prompt": "a sheet of paper being picked up and placed, short paper rustle"
+    },
+    {
+     "file": "paper_2.wav",
+     "seconds": 0.705,
+     "onset": 0.49,
+     "prompt": "a single page turning in a notebook, crisp"
+    }
+   ]
+  },
+  "thud": {
+   "kind": "hit",
+   "gain_db": -15,
+   "use": "something landing, weight, a block stacking",
+   "takes": [
+    {
+     "file": "thud_1.wav",
+     "seconds": 0.485,
+     "onset": 0.015,
+     "prompt": "a soft muffled thud of a book placed on a table, low and gentle"
+    },
+    {
+     "file": "thud_2.wav",
+     "seconds": 0.42,
+     "onset": 0.0,
+     "prompt": "a soft wooden block set down on a table, warm thump"
+    }
+   ]
+  },
+  "stamp": {
+   "kind": "hit",
+   "gain_db": -16,
+   "use": "approved, verified, done",
+   "takes": [
+    {
+     "file": "stamp_1.wav",
+     "seconds": 0.6,
+     "onset": 0.0,
+     "prompt": "a rubber stamp pressed firmly onto paper, short thump"
+    },
+    {
+     "file": "stamp_2.wav",
+     "seconds": 0.6,
+     "onset": 0.0,
+     "prompt": "an approval stamp on a document, one soft thunk"
+    }
+   ]
+  },
+  "notify": {
+   "kind": "hit",
+   "gain_db": -18,
+   "use": "a message or notification arrives",
+   "takes": [
+    {
+     "file": "notify_1.wav",
+     "seconds": 0.56,
+     "onset": 0.0,
+     "prompt": "a soft friendly two-note notification blip, modern phone"
+    },
+    {
+     "file": "notify_2.wav",
+     "seconds": 0.41,
+     "onset": 0.0,
+     "prompt": "a gentle short message received ping, soft"
+    }
+   ]
+  },
+  "wrong": {
+   "kind": "hit",
+   "gain_db": -18,
+   "use": "an error, a declined card, a wrong answer",
+   "takes": [
+    {
+     "file": "wrong_1.wav",
+     "seconds": 0.8,
+     "onset": 0.005,
+     "prompt": "a soft low muted error buzz, two short tones, gentle not harsh"
+    },
+    {
+     "file": "wrong_2.wav",
+     "seconds": 0.8,
+     "onset": 0.0,
+     "prompt": "a soft low descending two-note wrong-answer tone, muted"
+    }
+   ]
+  }
+ }
+}

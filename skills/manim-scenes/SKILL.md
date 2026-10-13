@@ -1,6 +1,6 @@
 ---
 name: manim-scenes
-description: Write, render and visually check Manim Community Edition scenes in the waitwhat house style (3Blue1Brown look - black background, CMU Serif, semantic colour palette, smooth transforms). One file per scene, timed to narration bookmarks, render → traceback → fix loop, contact-sheet review for overlapping or off-screen text. Includes templates for math proofs, timelines, flow/causal diagrams, maps, molecules, code walkthroughs, comparisons and company explainers. Use whenever animating scenes for a waitwhat video.
+description: Write, render and visually check Manim Community Edition scenes in the waitwhat house style (3Blue1Brown look - CMU Serif, semantic colour palette, smooth transforms - on the video's theme, from classic black to chalkboard, blueprint, paper or night sky, with sound cues tied to the animations). One file per scene, timed to narration bookmarks, render → traceback → fix loop, contact-sheet review for overlapping or off-screen text. Includes templates for math proofs, timelines, flow/causal diagrams, maps, molecules, code walkthroughs, comparisons and company explainers. Use whenever animating scenes for a waitwhat video.
 ---
 
 # Manim scenes, waitwhat style
@@ -26,10 +26,13 @@ class Squares(WaitwhatScene):
 
 ## The look (details in `references/style-guide.md`)
 
-- Pure black background, white primary text, CMU Serif for words (`T("…")`), LaTeX for math
-  (`M(r"a^2+b^2=c^2", colors={...})`), handwritten yellow only for "look here" asides (`hand`).
+- The video's theme (`plan.theme`: classic black by default; chalkboard, blueprint, paper,
+  space... see the style guide) is painted behind everything. Ink-coloured primary text, CMU
+  Serif for words (`T("…")`), LaTeX for math (`M(r"a^2+b^2=c^2", colors={...})`), handwritten
+  attention colour only for "look here" asides (`hand`).
 - Colours carry meaning: `color_of("concept")` reads `plan.palette`, so every scene agrees.
-  Yellow means attention. Greys are structure. Never decorate with colour.
+  `YELLOW` means attention. Greys are structure. Never decorate with colour, and never write hex:
+  the named colours adapt to the theme.
 - Few words on screen: labels, a formula, a key number. The narration carries sentences.
 - Big and calm: one focal object filling 50–70 % of the frame, generous margins, nothing within
   0.5 units of the edge, text never below `SIZE_SMALL`.
@@ -38,6 +41,12 @@ class Squares(WaitwhatScene):
   exits are quicker (`leave`). Typical run_time 1–3 s; the big reveal gets more, plus silence.
 - Signature move: the yellow pencil circle (`pencil_circle(target)`) to point at the thing
   that matters. Use it at most once or twice per scene.
+- Alive, not busy: the visual lands on (or just before) its word, the stressed word of a key
+  sentence gets a visual beat, and the frame never sits completely still for more than ~3 s
+  under narration. Tempo follows the scene's `energy`.
+- Sound comes from the animations: appear, write, draw and erase get quiet cues automatically;
+  add meaning with `self.play(..., sfx="coin")` or `self.sfx("chime", at="reveal")`. Details in
+  the style guide ("Sound cues").
 
 ## Timing comes from the voice
 

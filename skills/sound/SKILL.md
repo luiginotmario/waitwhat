@@ -1,15 +1,16 @@
 ---
 name: sound
-description: Music bed, transition sound effects and loudness for waitwhat videos - procedural royalty-free ambient music ducked under the narration with ffmpeg sidechaincompress, subtle whooshes on hard cuts, a pencil scribble under the brand stings, and EBU R128 loudnorm. Use when choosing the mood and mix of a waitwhat video or changing how it sounds.
+description: Music bed, sound effects and loudness for waitwhat videos - procedural royalty-free ambient music ducked under the narration, a curated library of subtle sound effects (pop, pencil, chalk, eraser, whoosh, chime, coin, keys...) timed to on-screen events, and EBU R128 loudnorm. Use when choosing the mood and mix of a waitwhat video, deciding which moments get a sound, or changing how it sounds.
 ---
 
 # Sound
 
 Sound should be felt, not noticed: the voice is the star, the music is a warm floor under it,
-and effects mark structure. `ww stitch` does the mixing; you choose settings in `plan.sound`:
+and small effects make what happens on screen feel physical. `ww stitch` does the mixing; you
+choose settings in `plan.sound`:
 
 ```json
-"sound": {"music": "calm", "music_db": -17, "sfx": true, "intro": true, "outro": true}
+"sound": {"music": "calm", "music_db": -17, "sfx": true, "sfx_auto": true, "intro": true, "outro": true}
 ```
 
 ## Music
@@ -30,13 +31,45 @@ and effects mark structure. `ww stitch` does the mixing; you choose settings in 
   further ~8–10 dB and lets it swell back in pauses. Lower to -20 for dense narration; raise to
   -14 for long silent visual beats.
 
-## Effects
-- Hard cuts (`"transition": "cut"`) get a soft whoosh (-26 dB) just before the new scene.
-  Continuous transitions get nothing: the image doesn't cut, so the sound shouldn't either.
-- The intro and outro stings get a quiet pencil scribble as the circle is drawn.
-- `sfx: false` turns all of this off. Don't add effects for every animation; a video full of
-  pops feels cheap. If one moment deserves a sound (the aha), say so in the plan and add it by
-  hand with `music.py sfx` + ffmpeg, but that's rare.
+## Effects: small sounds on real events
+
+Effects make the drawing feel physical: a soft pop when something appears, the scratch of the
+pen while a formula is written, an eraser rub, a whoosh on a cut, a chime on the aha, a coin when
+money moves. They sit well under the voice and land on the frame where the event happens.
+
+```json
+"sound": {"music": "bright", "sfx": true, "sfx_auto": true, "sfx_db": 0}
+```
+
+- **Source.** `assets/sfx/` holds a curated library (2–4 takes of each sound, loudness-matched,
+  generated once; `ww sfx list`). Per video it costs nothing. Sounds: `pop`, `tick`, `click`,
+  `pencil`, `chalk`, `marker`, `eraser`, `whoosh`, `swish`, `rise`, `chime`, `shimmer`, `coin`,
+  `register`, `keys`, `paper`, `thud`, `stamp`, `notify`, `wrong`.
+- **Automatic cues** (the scene builders get these for free): appear (`FadeIn`, `enter`,
+  `Grow…`) → a soft pop, a staggered group → a few ticks; `Write` → the theme's pen (pencil;
+  chalk on `chalkboard`, marker on `whiteboard`); `Create` → a quieter pen stroke; `erase`/
+  `Uncreate` → eraser; typing animations → keys. Moves, transforms, fades out and highlights
+  stay silent. `"sfx_auto": false` turns the automatic ones off for the whole video.
+- **Chosen cues** carry meaning, so the scene builder adds them where the story says so:
+  `self.play(..., sfx="coin")`, `sfx="chime@end"`, `self.sfx("rise", at="reveal")`. Typical:
+  money → `coin`; a payment that goes through → `register`; approval → `stamp`; a request or
+  code → `keys`; a message → `notify`; a failure → `wrong`; the aha → `chime` or `rise` (once per
+  video, maybe twice); a big in-scene move → `swish`; a document → `paper`.
+- **Mixing** (`ww stitch`): each cue lands its take's attack (a whoosh's crest) on the event;
+  takes rotate with slight pitch and level variation, so repeats never sound copied; cues are
+  thinned (chosen cues win over automatic ones; an automatic cue needs 0.6 s of space, at most one
+  other cue within 1.25 s and two within 2.5 s; textures never overlap; even chosen cues are capped at 6 within
+  1.25 s); the effects bus is ducked a few dB while the
+  voice speaks and kept out of the music's ducking. Levels sit about 12–18 dB under the voice (meaningful sounds like coin or chime nearer 12, pops
+  and pen strokes nearer 18).
+  `sfx_db` trims the whole bus (±3 is plenty). The log of what was placed and dropped is
+  `workspace/logs/sfx.json`.
+- **Structure**: hard cuts (`"transition": "cut"`) get a whoosh whose crest lands on the cut;
+  continuous transitions get nothing. The intro sting gets chalk under the wordmark.
+- **Restraint**: a sound per *event the viewer should notice*, not per animation. If a scene is
+  a burst of many small entrances, let the thinning handle it or pass `sfx=False`. Serious
+  subjects (illness, loss): `"sfx_auto": false` and only structural sounds. `"sfx": false`
+  turns everything off.
 
 ## Loudness
 Final mix is normalised with `loudnorm` to -16 LUFS integrated, -1.5 dBTP, LRA 11 (web/podcast

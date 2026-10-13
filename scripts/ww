@@ -10,7 +10,9 @@
 #   ww render <id...> | --all [-j N] final 1080p30 → workspace/renders/ (waits for pending audio)
 #   ww stitch                        → out/video.mp4, out/thumbnail.jpg, out/manifest.json
 #   ww fetch <url>                   Jina Reader → workspace/research/*.md
-#   ww music bed --mood calm ...     procedural music / sfx
+#   ww music bed --mood calm ...     procedural music
+#   ww sfx list                      the sound-effect library (assets/sfx)
+#   ww backdrop "prompt"             optional AI-painted theme backdrop → workspace/backdrop.png
 #   ww refine <job> "text" --at 42   new version dir for a local refine
 #   ww check [job]                   validate out/ against the job contract
 #   ww manim ...                     raw manim inside the toolchain
@@ -29,7 +31,9 @@ case "$cmd" in
   render)   py "$ROOT/scripts/render.py" "$@" ;;
   stitch)   py "$ROOT/scripts/stitch.py" "$@" ;;
   music)    py "$ROOT/scripts/music.py" "$@" ;;
+  sfx)      py "$ROOT/scripts/sfx_library.py" "$@" ;;
+  backdrop) exec python3 "$ROOT/scripts/backdrop.py" "$@" ;;
   manim)    "$ROOT/scripts/run.sh" manim "$@" ;;
-  help|-h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//' ;;
+  help|-h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) echo "ww: unknown command '$cmd' (try: ww help)" >&2; exit 2 ;;
 esac

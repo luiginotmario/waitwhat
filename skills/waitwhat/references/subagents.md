@@ -46,6 +46,9 @@ Starts on: <what is on screen at the start: the previous scene's end state, buil
            shared.make_triangle(), or "a cut: empty frame">.
 Ends on:   <what must be on screen at the end, for the next scene's handoff>.
 Use: shared.make_triangle(), shared.SQUARE_STYLE; palette a=BLUE, b=TEAL, c=YELLOW_SOFT.
+Energy and beats: <energy, e.g. "low, slow build", and the 1–3 words that need a visual beat>.
+Sound moments: <the chosen cues, e.g. "coin when the fee appears; chime@end on the reveal">,
+               or "automatic only".
 Watch out for: <anything you already know is tricky, e.g. long labels near the right edge>.
 ```
 
@@ -60,7 +63,8 @@ done`, and replies in one or two lines (scene, duration vs narration, status, de
 2. Review every contact sheet in ONE turn (parallel Reads of `workspace/frames/<id>_sheet.jpg`).
    Look for what only you can see across scenes: colours drifting from the palette, a handoff
    that jumps (end of A ≠ start of B), text sizes that differ, one scene far busier than its
-   neighbours.
+   neighbours, a scene that ignores the theme (hard-coded black or white), a flat run of
+   scenes with the same rhythm.
 3. Fix only what matters. Send the fix to the same subagent if it can still be messaged
    (SendMessage), otherwise brief a new `scene-builder` with the specific change, or make a
    one-line fix yourself and `ww render <id>`. Several fixes go out in parallel, like the first

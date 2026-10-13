@@ -4,6 +4,7 @@
 
 | Beat | Questions | Where to look |
 | --- | --- | --- |
+| Founding story (if documented) | Who started it, when, and what problem did *they* hit? What was the turning point (a launch, a hack, a decision)? Any well-known, sourced line (e.g. a famous early pitch)? | about/"our story" pages, founder interviews and talks, reputable profiles; two independent sources for anything stated as fact |
 | Everyday problem | Who has the problem? What does a bad day look like for them? What does it cost (time, money, risk)? | homepage hero, case studies, blog "why we built" |
 | What they built | What does the product *do*, in a verb phrase? What's the input and output? | product/features pages, docs overview |
 | Concrete example | One real scenario, start to finish: who, what they put in, what happens, what comes out | case studies, docs quickstart, demo pages |

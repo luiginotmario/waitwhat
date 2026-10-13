@@ -51,9 +51,10 @@ workspace/
   scenes/shared.py     objects/constructors reused across scenes (continuity)
   audio/<id>.wav|json  narration + word timings + bookmark times (ww tts)
   renders/<id>.mp4|json  final 1080p30 scene renders + content hash (ww render)
+  renders/<id>.cues.json sound-effect cues the scene logged ({t, name, gain, dur?, auto?}), mixed by ww stitch
   previews/<id>.mp4|json  fast 480p15 previews (ww render --preview); never stitched
   frames/<id>_*.jpg    review frames + <id>_sheet.jpg contact sheet
-  logs/                render logs, layout lint, probes
+  logs/                render logs, layout lint, probes, sfx.json (effects placed/dropped by stitch)
   timeline.json        final segment times (ww stitch), used by refine
   thumbnail.png        optional custom thumbnail (a rendered still)
   versions.md          one line per version: what changed and why (refines append)
@@ -68,7 +69,7 @@ workspace/
   "title": "Why the Pythagorean theorem is true",
   "mode": "topic",                       // topic | attachments | company | refine (mixes allowed)
   "question": "Why should the squares on the two short sides add up to the square on the long side?",
-  "audience": "curious adult, no algebra needed beyond squaring",
+  "audience": "newcomer: curious adult, no algebra needed beyond squaring",  // level first: newcomer | intermediate | expert
   "aha": "The same four triangles leave behind either a² + b² or c², so they must be equal.",
   "duration_target": 150,                // seconds: request.plan.est_minutes × 60
   "asked": ["why a² + b² = c²"],          // what the person explicitly asked for (from request.plan)
@@ -82,8 +83,9 @@ workspace/
             "stability": 0.45, "similarity_boost": 0.8, "style": 0.15, "speed": 1.12,
             "say_voice": "Daniel", "say_rate": 182},
   "pronunciations": {"Euler": "Oiler"},
-  "palette": {"a": "BLUE", "b": "TEAL", "c": "YELLOW_SOFT", "triangle": "GREY"},
-  "sound": {"music": "calm", "music_db": -17, "sfx": true, "intro": true, "outro": true},
+  "theme": "classic",                    // the video's world (style guide): classic | studio | chalkboard | blueprint | space | ocean | city | whiteboard | graph_paper | paper | hills; or {"name", "ambient": false}
+  "palette": {"a": "BLUE", "b": "TEAL", "c": "YELLOW_SOFT", "triangle": "GREY"},  // colour NAMES, so they follow the theme
+  "sound": {"music": "calm", "music_db": -17, "sfx": true, "sfx_auto": true, "sfx_db": 0, "intro": true, "outro": true},
   "thumbnail": {"scene": "rearrange", "t": 9.5},
   "scenes": [
     {
@@ -94,6 +96,8 @@ workspace/
       "visual": "Right triangle fades up; three squares grow off its sides in their concept colours …",
       "covers": [1],                     // 1-based outline items this scene serves (every item needs at least one scene)
       "transition": "cut",               // how THIS scene is entered: continuous (starts on the previous scene's last frame, no whoosh) | cut
+      "energy": "high",                  // delivery + tempo: high | medium | low | reveal | close (optional, default medium)
+      "theme": "space",                  // optional: only when the story moves to another place
       "lead_in": 0.35                    // optional seconds before narration starts
     }
   ],

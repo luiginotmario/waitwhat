@@ -64,11 +64,48 @@ screen ("this blue square", "watch the gap") because the picture is doing half t
 read on-screen text aloud word for word, and never put full narration sentences on screen. More,
 with examples, in `references/narration.md`.
 
-## Depth adapts to the audience
+## Depth follows the asker
 
-Same structure, different floor. For "like I'm 10": no unexplained terms, analogies from daily
-life, numbers small enough to picture. For experts: still intuition first, but you may move
-faster, use notation, and add the subtle case at the end. Never condescend; assume curiosity.
+The level in `plan.audience` (`newcomer`, `intermediate`, `expert`, read from the asker's own
+vocabulary) sets the floor and the pace. Same structure, different floor.
+- **Newcomer** (vague, everyday wording): open on a concrete everyday picture, earn every term,
+  and go progressively deeper chapter by chapter so the ending reaches real substance, not just
+  the overview.
+- **Expert** (precise jargon in the question): don't re-teach what their question already
+  used. Intuition still comes first, but faster; use the precise terms and notation, spend the
+  time on mechanism, trade-offs, failure cases and the subtle part they came for.
+- **"Like I'm 10"**: no unexplained terms, analogies from daily life, numbers small enough to
+  picture. Same respect, simpler words.
+
+At every level, **introduce a term and explain it in the same breath**: "a payment processor,
+the company that actually moves the money between banks, ...". The term goes on screen as a
+label; the meaning goes in the voice. Never condescend; assume curiosity.
+
+## When there is a story, tell it
+
+Companies, inventions, discoveries and turning points in history are stories before they are
+facts. Find the real one and use it as the spine:
+- **A protagonist** with a name and a situation (two brothers writing software, a clerk in a
+  patent office, a team with a deadline).
+- **A problem they felt**, shown concretely: what it cost, in time, money or frustration.
+- **Stakes**: why it mattered then, and to whom.
+- **The turning point**: the decision, insight or hack that changed things ("seven lines of
+  code").
+- **What it unlocked**, which is where the explanation of *how it works* lives.
+
+Shape the build-up as "and, but, therefore": state the situation, then the *but* (the tension),
+then what that forced. A list of "and, and, and" is information, not a story; find the *but*.
+The tension must come from the record, never be manufactured. Every name, date, number and quote
+must be verified (`waitwhat:research`); if the story can't be verified, tell the problem instead.
+The story serves the explanation: keep it to the beats that make the idea land, then go deep.
+
+## Energy and pacing
+
+Give each scene an `energy` so the video has an arc: `high` (the hook, a turning point),
+`medium` (steady explaining), `low` (the hush before the insight, serious moments), `reveal`
+(the aha), `close` (the calm ending). It sets the voice's delivery and the animation tempo. Vary
+it: three `medium` scenes in a row is a plateau. Before the biggest reveal, give it a short
+"dramatic comma" (a held picture or one `<break time="0.5s"/>`), then let it land.
 
 ## Before you hand the plan to animation, check
 
@@ -80,9 +117,14 @@ faster, use notation, and add the subtle case at the end. Never condescend; assu
 - Is each scene's visual something only animation can show (motion, transformation,
   accumulation, comparison), rather than slides with words?
 - Does the ending pay off the hook?
+- Does the depth match the asker's level? Is every term explained where it first appears?
+- If the subject has a real story, is it told (protagonist, problem, stakes, turning point),
+  and is every fact in it sourced?
+- Does the energy change across scenes, with a clear lift at the reveal?
 
 Deeper material, loaded on demand:
 - `references/principles.md`: Grant Sanderson's design principles, the pedagogy checklist,
   and what research says about engaging educational video.
-- `references/arcs.md`: story arcs with worked outlines (math, history, science, tech, company).
+- `references/arcs.md`: story arcs with worked outlines (math, history, science, tech, company,
+  founding story).
 - `references/narration.md`: narration craft, examples of weak vs strong lines, pacing math.

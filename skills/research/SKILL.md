@@ -37,6 +37,9 @@ Credit it in the narration naturally ("in this paper, the authors…").
    usually solved). Don't name or compare competitors in the video.
 3. Fill this arc, in plain language, with something concrete at each step (see
    `references/company-arc.md` for questions and an example):
+   - **Founding story** (when it is documented): the founders, the problem they hit, the
+     turning point. It is often the best hook. Names, dates and famous lines need a source each;
+     leave out anything you can't confirm.
    - **Everyday problem**: a specific person and a specific moment of pain.
    - **What they built**: one sentence a 12-year-old would understand, then one level deeper.
    - **Concrete example**: one real use case, walked end to end (from their docs or case study).

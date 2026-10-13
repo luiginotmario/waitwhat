@@ -11,8 +11,18 @@ Reads workspace/plan.json, renders/<id>.mp4, audio/<id>.{wav,json}; writes
   workspace/timeline.json   segment start/duration per scene id (used by refine and render --probe)
 
 Audio: narration placed at each scene's start + lead_in; a music bed (procedural, or a file) ducked
-under the voice with sidechaincompress; optional soft whooshes on hard cuts and a pencil scribble
-under the stings; then loudnorm. Run it with the plugin venv (numpy), e.g. via scripts/ww stitch.
+under the voice with sidechaincompress; sound effects (see below) on their own bus, also ducked
+under the voice; then loudnorm. Run it with the plugin venv (numpy), e.g. via scripts/ww stitch.
+
+Sound effects come from the curated library in assets/sfx (library.json: several takes per sound,
+loudness-matched, with the onset of each take). The cues are the ones each scene logged against
+its own clock (renders/<id>.cues.json: appear → pop, write → pencil/chalk/marker, erase → eraser,
+plus explicit ones like coin or chime), plus a whoosh on hard cuts and chalk under the intro sting.
+Each cue lands its take's onset on the event; takes rotate (never the same take twice in a row)
+with a little pitch and level variation; automatic cues are thinned so the track never gets busy
+(automatic cues: none within 0.6 s of another cue, at most one other within 1.25 s and two within
+2.5 s, textures never overlap; chosen cues: at most 6 within 1.25 s). What was
+placed and dropped is logged to workspace/logs/sfx.json.
 """
 from __future__ import annotations
 
@@ -91,6 +101,161 @@ def place(track: np.ndarray, clip: np.ndarray, at: float, gain_db: float = 0.0) 
     track[i:i + n] += clip[:n] * (10 ** (gain_db / 20))
 
 
+class SfxLibrary:
+    """assets/sfx/library.json + decoded takes (mono float32 at SR), loaded lazily."""
+
+    def __init__(self, root: Path):
+        self.dir = root / "assets" / "sfx"
+        f = self.dir / "library.json"
+        self.sounds = json.loads(f.read_text()).get("sounds", {}) if f.exists() else {}
+        self._audio: dict[str, np.ndarray] = {}
+        self._last: dict[str, int] = {}
+
+    def __bool__(self) -> bool:
+        return bool(self.sounds)
+
+    def audio(self, file: str) -> np.ndarray:
+        if file not in self._audio:
+            self._audio[file] = read_wav(self.dir / file)[:, :1]
+        return self._audio[file]
+
+    def pick(self, name: str, rng: np.random.Generator) -> dict | None:
+        """A take of `name`, never the same one twice in a row."""
+        snd = self.sounds.get(name)
+        if not snd:
+            return None
+        n = len(snd["takes"])
+        choices = [i for i in range(n) if i != self._last.get(name)] or list(range(n))
+        i = int(rng.choice(choices))
+        self._last[name] = i
+        return snd["takes"][i]
+
+
+def fit_texture(x: np.ndarray, target: float) -> np.ndarray:
+    """Trim (with a fade) or loop (with crossfades) a texture take to `target` seconds."""
+    n = int(target * SR)
+    xf = int(0.05 * SR)
+    if len(x) >= n:
+        y = x[:n].copy()
+    else:
+        y = x.copy()
+        while len(y) < n:
+            fade = np.linspace(0, 1, xf, dtype=np.float32)[:, None]
+            head = y[-xf:] * (1 - fade) + x[:xf] * fade
+            y = np.concatenate([y[:-xf], head, x[xf:]])
+        y = y[:n]
+    fo = min(int(0.08 * SR), len(y) // 3)
+    if fo > 0:
+        y[-fo:] *= np.linspace(1, 0, fo, dtype=np.float32)[:, None]
+    return y
+
+
+def varispeed(x: np.ndarray, r: float) -> np.ndarray:
+    """Resample by r (r > 1 = higher and shorter): a little natural variation between repeats."""
+    if abs(r - 1) < 1e-3 or len(x) < 4:
+        return x
+    idx = np.arange(0, len(x) - 1, r)
+    return np.interp(idx, np.arange(len(x)), x[:, 0]).astype(np.float32)[:, None]
+
+
+def thin_cues(cues: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Density limit. Structural cues (cut whooshes) and explicit cues win over automatic ones;
+    automatic cues need 0.6 s of space around them, at most one other cue within 1.25 s and two
+    within 2.5 s, and
+    textures (writing, typing, erasing) never overlap each other. Even chosen cues are capped
+    (0.18 s between repeats of one sound, at most 6 within 1.25 s)."""
+    kept: list[dict] = []
+    dropped: list[dict] = []
+    for c in sorted(cues, key=lambda c: (-c["prio"], c["at"])):
+        auto = c["prio"] <= 1
+        why = None
+        for k in kept:
+            g = 0.6 if auto or k["prio"] <= 1 else (0.18 if k["name"] == c["name"] else 0.1)
+            if abs(k["at"] - c["at"]) < g:
+                why = f"too close to {k['name']}"
+                break
+            if auto and c.get("dur") and k.get("dur") and k["at"] < c["at"] + c["dur"] and c["at"] < k["at"] + k["dur"]:
+                why = f"overlaps {k['name']}"
+                break
+        near = sum(1 for k in kept if abs(k["at"] - c["at"]) < 1.25)
+        wide = sum(1 for k in kept if abs(k["at"] - c["at"]) < 2.5)
+        if not why and ((near >= 2 or wide >= 3) if auto else near >= 6):
+            why = "busy"
+        if why:
+            dropped.append({**c, "why": why})
+        else:
+            kept.append(c)
+    return sorted(kept, key=lambda c: c["at"]), sorted(dropped, key=lambda c: c["at"])
+
+
+def build_sfx(segs: list[dict], ws: Path, snd: dict, n: int, title: str) -> np.ndarray:
+    """The sound-effects bus (mono) for the whole video, from the scenes' cue files."""
+    fx = np.zeros((n, 1), np.float32)
+    lib = SfxLibrary(ROOT)
+    cues: list[dict] = []
+    for k, s in enumerate(segs):
+        if s["id"] == "_intro":
+            cues.append({"at": s["start"] + 0.05, "name": "chalk", "gain": -3.0, "dur": 1.1, "prio": 3, "scene": "_intro"})
+            continue
+        if k > 0 and (s["id"] == "_outro" or s.get("transition", "cut") == "cut"):
+            cues.append({"at": s["start"], "name": "whoosh", "gain": -1.0, "prio": 3, "scene": s["id"]})
+        if s["id"].startswith("_"):
+            continue
+        f = ws / "renders" / f"{s['id']}.cues.json"
+        if not f.exists():
+            continue
+        try:
+            data = json.loads(f.read_text())
+        except Exception:
+            continue
+        for c in data.get("cues", []):
+            if c.get("auto") and not snd.get("sfx_auto", True):
+                continue
+            t = float(c.get("t", 0))
+            if t > s["duration"] + 0.05:
+                continue
+            cues.append({"at": round(s["start"] + t, 3), "name": c.get("name"), "gain": float(c.get("gain", 0)),
+                         "dur": c.get("dur"), "prio": 1 if c.get("auto") else 2, "scene": s["id"],
+                         "kind": c.get("kind")})
+    kept, dropped = thin_cues(cues)
+    rng = np.random.default_rng(sum(map(ord, title)) % 100000)
+    placed = []
+    if lib:
+        base_db = float(snd.get("sfx_db", 0.0))
+        for c in kept:
+            meta = lib.sounds.get(c["name"])
+            take = lib.pick(c["name"], rng)
+            if not take:
+                dropped.append({**c, "why": "not in the library"})
+                continue
+            x = lib.audio(take["file"])
+            r = float(rng.uniform(0.96, 1.04))
+            x = varispeed(x, r)
+            onset = float(take.get("onset", 0)) / r
+            if meta["kind"] == "texture":
+                x = fit_texture(x, min(3.0, max(0.25, float(c.get("dur") or len(x) / SR))))
+                onset = 0.0
+            gain = float(meta.get("gain_db", -16)) + c["gain"] + base_db + float(rng.uniform(-1, 1))
+            at = max(0.0, c["at"] - onset)
+            place(fx, x, at, gain)
+            placed.append({"at": c["at"], "name": c["name"], "take": take["file"], "gain_db": round(gain, 1),
+                           "scene": c["scene"], **({"dur": c["dur"]} if c.get("dur") else {}),
+                           **({"auto": True} if c["prio"] == 1 else {})})
+    else:  # no library: the old procedural whoosh on cuts and scribble under the intro
+        sfx_dir = ROOT / ".cache" / "sfx"
+        if not (sfx_dir / "whoosh.wav").exists():
+            run([sys.executable, str(ROOT / "scripts" / "music.py"), "sfx", "-o", str(sfx_dir)])
+        whoosh, scribble = read_wav(sfx_dir / "whoosh.wav"), read_wav(sfx_dir / "scribble.wav")
+        for c in kept:
+            if c["name"] == "whoosh":
+                place(fx, whoosh, max(0, c["at"] - 0.35), -26)
+            elif c["scene"] == "_intro":
+                place(fx, scribble, c["at"] + 0.57, -20)
+    (ws / "logs").mkdir(parents=True, exist_ok=True)
+    (ws / "logs" / "sfx.json").write_text(json.dumps({"placed": placed, "dropped": dropped}, indent=1))
+    return fx
+
+
 def plain(text: str) -> str:
     return re.sub(r"\s+", " ", TAG.sub(" ", text or "")).strip()
 
@@ -103,6 +268,7 @@ def main() -> None:
     ap.add_argument("--no-intro", action="store_true")
     ap.add_argument("--no-outro", action="store_true")
     ap.add_argument("--no-sfx", action="store_true")
+    ap.add_argument("--stems", metavar="DIR", help="also save the narration, effects and music stems here (for checking the mix)")
     a = ap.parse_args()
 
     job = Path(a.job).resolve()
@@ -187,19 +353,7 @@ def main() -> None:
             if s.get("audio") and s["audio"].exists():
                 place(narr, read_wav(s["audio"]), s["start"] + s["lead_in"])
         if snd["sfx"]:
-            sfx_dir = ROOT / ".cache" / "sfx"
-            if not (sfx_dir / "whoosh.wav").exists():
-                run([sys.executable, str(ROOT / "scripts" / "music.py"), "sfx", "-o", str(sfx_dir)])
-            whoosh, scribble = read_wav(sfx_dir / "whoosh.wav"), read_wav(sfx_dir / "scribble.wav")
-            for k, s in enumerate(segs):
-                if s["id"] == "_intro":
-                    place(fx, scribble, s["start"] + 0.62, -20)
-                elif s["id"] == "_outro":
-                    place(fx, scribble, s["start"] + 0.45, -22)
-                    if k > 0:
-                        place(fx, whoosh, max(0, s["start"] - 0.35), -26)
-                elif k > 0 and s.get("transition", "cut") == "cut":
-                    place(fx, whoosh, max(0, s["start"] - 0.35), -26)
+            fx = build_sfx(segs, ws, snd, n, plan.get("title", "waitwhat"))
         write_wav(tmp / "narr.wav", narr)
         write_wav(tmp / "fx.wav", fx)
 
@@ -221,17 +375,29 @@ def main() -> None:
         # -------------------------------------------------------------- mix + loudness
         mix = tmp / "mix.wav"
         ins = ["-i", str(tmp / "narr.wav"), "-i", str(tmp / "fx.wav")]
+        # The effects bus is ducked under the voice too (gently: ~3-6 dB while someone speaks), and
+        # kept out of the music's sidechain so a whoosh never pumps the bed.
+        fx_duck = "sidechaincompress=threshold=0.04:ratio=3:attack=5:release=250:makeup=1"
         if bed:
             ins += ["-i", str(bed)]
-            fc = (f"[0:a]asplit=2[n1][n2];"
+            fc = (f"[0:a]asplit=3[n1][n2][n3];"
                   f"[2:a]volume={snd['music_db']}dB[m];"
                   f"[m][n2]sidechaincompress=threshold=0.02:ratio=8:attack=20:release=450:makeup=1[md];"
-                  f"[n1][md][1:a]amix=inputs=3:normalize=0:duration=first,"
+                  f"[1:a][n3]{fx_duck}[fd];"
+                  f"[n1][md][fd]amix=inputs=3:normalize=0:duration=first,"
                   f"loudnorm=I=-16:TP=-1.5:LRA=11,aresample={SR}[out]")
         else:
-            fc = f"[0:a][1:a]amix=inputs=2:normalize=0:duration=first,loudnorm=I=-16:TP=-1.5:LRA=11,aresample={SR}[out]"
+            fc = (f"[0:a]asplit=2[n1][n3];[1:a][n3]{fx_duck}[fd];"
+                  f"[n1][fd]amix=inputs=2:normalize=0:duration=first,loudnorm=I=-16:TP=-1.5:LRA=11,aresample={SR}[out]")
         run(["ffmpeg", "-loglevel", "error", "-y", *ins, "-filter_complex", fc, "-map", "[out]",
              "-t", f"{vtotal:.3f}", str(mix)])
+
+        if a.stems:
+            sd = Path(a.stems)
+            sd.mkdir(parents=True, exist_ok=True)
+            for name in ("narr.wav", "fx.wav", "bed.wav", "mix.wav"):
+                if (tmp / name).exists():
+                    shutil.copy2(tmp / name, sd / name)
 
         final = out / "video.mp4"
         run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(video), "-i", str(mix), "-map", "0:v", "-map", "1:a",
