@@ -13,7 +13,8 @@ and the video waits for the slowest one. So the hand-off is two messages, the br
 
 **Message 1** (one assistant message, three tool calls):
 1. Write `workspace/plan.json`, final: every scene's `narration` (with bookmarks), `goal`,
-   `visual`, `build`, `transition`, `covers`, `energy`, plus `palette`, `theme`, `voice`, `sound`.
+   `visual`, `build`, `transition`, `covers`, `energy` (and `backdrop` in a 2.5D video), plus
+   `style`, `palette`, `theme`, `voice`, `sound`.
    `visual` and `build` are the builder's brief, so make them concrete: what appears where and on
    which word, the `shared.py` objects to use, what is on screen at the start and the end (for
    `continuous` handoffs), the beats, the chosen sound moments, what to watch out for.
@@ -49,6 +50,8 @@ Scene: squares (2 of 6) → workspace/scenes/squares.py. Your brief is its entry
 
 For a scene marked `"dim": "3d"`, the optional line is always:
 `3D scene: in your first turn also Read /abs/plugin/skills/manim-scenes/references/3d.md.`
+In a `"style": "25d"` video, the optional line is always:
+`2.5D video: WaitwhatScene25D; in your first turn also Read /abs/plugin/skills/manim-scenes/references/25d.md.`
 
 Each subagent writes its scene, renders the final 1080p (`ww render <id>`, a few seconds; it
 marks the scene's progress), looks at the 2x2 sheet, fixes only real problems, and replies in

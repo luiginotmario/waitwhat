@@ -1,9 +1,15 @@
 ---
 name: manim-scenes
-description: Write, render and visually check Manim Community Edition scenes in the waitwhat house style (3Blue1Brown look - CMU Serif, semantic colour palette, smooth transforms - on the video's theme, from classic black to chalkboard, blueprint, paper or night sky, with sound cues tied to the animations). One file per scene, timed to narration bookmarks, render → traceback → fix loop, contact-sheet review for overlapping or off-screen text. Includes templates for math proofs, timelines, flow/causal diagrams, maps, molecules, code walkthroughs, comparisons and company explainers, plus 3D scenes in the same look (exploded layers, cutaways, surfaces, orbits) for the few physical ideas that need depth. Use whenever animating scenes for a waitwhat video.
+description: Write, render and visually check Manim Community Edition scenes in the waitwhat styles - classic (3Blue1Brown look - CMU Serif, semantic colour palette, smooth transforms - on the video's theme, from classic black to chalkboard, blueprint, paper or night sky, with sound cues tied to the animations). One file per scene, timed to narration bookmarks, render → traceback → fix loop, contact-sheet review for overlapping or off-screen text. Includes templates for math proofs, timelines, flow/causal diagrams, maps, molecules, code walkthroughs, comparisons and company explainers, plus 3D scenes in the same look (exploded layers, cutaways, surfaces, orbits) for the few physical ideas that need depth - and 2.5D (flat illustrated explainer-agency art in depth layers with a parallax camera, a consistent character kit, props and snappy pop-in motion) for companies, products, everyday questions, history and stories. Use whenever animating scenes for a waitwhat video.
 ---
 
 # Manim scenes, waitwhat style
+
+**Two styles, chosen per video in `plan.style`:** `"classic"` (everything below: the 3b1b look,
+for maths, science and education) and `"25d"` (flat illustrated layers with a parallax camera,
+for everything else). In a 2.5D video, read **`references/25d.md`** first (`ww brief` prints it as
+`read_first`) and use `WaitwhatScene25D`; the timing, sound, aspect and render loop below are the
+same, the look rules are in that reference.
 
 Each scene is `workspace/scenes/<id>.py` containing one `WaitwhatScene` subclass. Start every
 file with `from waitwhat_style import *` (the lib is `lib/waitwhat_style.py` in this skill; it is
@@ -76,6 +82,18 @@ then hold still): then a 3D scene renders in 4–10 s, the same class as 2D. **R
 `references/3d.md` before writing one** (camera grammar, labels, patterns, budget, 9:16 framing,
 pitfalls), and start from a 3D template.
 
+## 2.5D scenes (only in a `"style": "25d"` video)
+
+Every scene of a 2.5D video is a `WaitwhatScene25D` (same import, timing, sound, aspects, lint):
+flat rounded vector art with soft shadows and rim light, in depth layers (`far`, `mid`, `main`,
+`near`, `hud`) that a parallax camera moves at different speeds (`pan_to`, `push_in`, `dolly`,
+`drift`); a backdrop per scene (`outdoors`, `city`, `room`, `office`, `plain`); a cast of
+consistent characters (`cast("maya")`, poses, faces, blink); props (`phone`, `laptop`, `shop`,
+`bank`, `coin`, `chart`...); text on pills (`pill`, `tag`, `bubble`, `headline`); and snappy motion
+(`pop_in` with a small overshoot, `slide_in`, `travel`, `nudge`, `burst`), a new beat every
+2-3 s. Read `references/25d.md` (API, layering rules, catalogue, pacing, 9:16, budget, pitfalls)
+and start from a 2.5D template. A 2.5D scene renders in 4-10 s.
+
 ## Timing comes from the voice
 
 `ww tts` writes `workspace/audio/<id>.json` (it may still be voicing while you write the code:
@@ -134,8 +152,12 @@ back in a line or two.
 | `cutaway.py` | 3D: what is inside (a battery cell, a cable, a planet, an eye), and what flows in it |
 | `surface_wave.py` | 3D: a quantity over a plane that moves (ripples, sound, a membrane, a field) |
 | `orbit.py` | 3D: things going around things (planets, moons, satellites, a tilted axis) |
+| `story_problem.py` | 2.5D: the protagonist with a problem in a place (who, problem, cost, the question) |
+| `service_flow.py` | 2.5D: a product/service flow across a place, the camera travelling with it (shop → product → bank) |
+| `city_overview.py` | 2.5D: a system's parts in two depth rows, connected, then a parallax push-in |
+| `before_after.py` | 2.5D: before/after with the same character in two little worlds |
 
 Read only the template you need. Adapt freely; they show the style, not the only way. The
-comparison, flow and timeline templates and the four 3D templates are written once for both
-aspects (`by_aspect`, `MAIN`, `SAFE_CENTER`, `fit_zoom`); the others are laid out for 16:9, so
+comparison, flow and timeline templates, the four 3D templates and the four 2.5D templates are
+written once for both aspects (`by_aspect`, `MAIN`, `SAFE_CENTER`, `fit_zoom`); the others are laid out for 16:9, so
 re-place their objects with the layout helpers in a 9:16 video.

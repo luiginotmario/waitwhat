@@ -64,6 +64,10 @@ money moves. They sit well under the voice and land on the frame where the event
   and pen strokes nearer 18).
   `sfx_db` trims the whole bus (±3 is plenty). The log of what was placed and dropped is
   `workspace/logs/sfx.json`.
+- **2.5D videos** (`plan.style` `"25d"`) favour pops, whooshes and soft clicks over pen
+  sounds: pop-ins get soft pops (a staggered burst a few of them), slides a quiet swish, camera
+  moves a swish (short) or a whoosh (long), confetti a shimmer, and the theme's "write" sound is a
+  click. Music: usually `bright` (products, companies, playful) or `curious` (stories, mysteries).
 - **Structure**: hard cuts (`"transition": "cut"`) get a whoosh whose crest lands on the cut;
   continuous transitions get nothing. The intro sting gets chalk under the wordmark.
 - **Restraint**: a sound per *event the viewer should notice*, not per animation. If a scene is

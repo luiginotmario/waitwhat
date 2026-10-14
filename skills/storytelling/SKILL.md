@@ -34,7 +34,8 @@ idea themselves. Everything below serves that.
 8. **Cover everything the request needs, and nothing it doesn't.** The coverage plan
    (`plan.outline` in request.json, see the waitwhat skill) is the checklist: every item gets
    at least one scene, in order, and nothing outside it gets screen time. Length follows from
-   that (about 190 spoken words per minute; scenes are typically 10–25 s), so a narrow question
+   that (about 190 spoken words per minute; scenes are typically 10–25 s; a 2.5D video runs
+   brisker, see "2.5D pace"), so a narrow question
    is a short video and a broad one is a long one. Tight beats padded at every length: cut
    tangents and repetition, never a needed step.
 
@@ -111,6 +112,22 @@ Give each scene an `energy` so the video has an arc: `high` (the hook, a turning
 (the aha), `close` (the calm ending). It sets the voice's delivery and the animation tempo. Vary
 it: three `medium` scenes in a row is a plateau. Before the biggest reveal, give it a short
 "dramatic comma" (a held picture or one `<break time="0.5s"/>`), then let it land.
+
+## 2.5D pace (only in a `"style": "25d"` video)
+
+The illustrated style is for companies, products, everyday questions, history and stories, and
+it should feel lively, not slow:
+- **Brisker narration**: about 200-210 words per minute (`voice.speed` 1.15; the classic videos
+  stay at ~190). Shorter sentences than the classic narrator, still conversational.
+- **Shorter scenes**: 8-15 s each (about 28-50 words), one idea each, more of them.
+- **More beats**: a new visual beat every 2-3 s, so 3-5 bookmarks per scene (classic: 1-4). Each
+  bookmark is a moment something appears, changes or moves.
+- **A protagonist where it fits**: a person (real, from the record, or an everyday stand-in that
+  you say is one: "say you run a bakery") who carries the problem, the turning point and the
+  payoff, and who appears in most scenes (`cast()` in `shared.py`). A real founder story stays a
+  real story; never invent a real person's words.
+- Energy still has an arc, but the floor is higher: few `low` scenes, a quick hush before the
+  reveal, then a lift.
 
 ## Before you hand the plan to animation, check
 

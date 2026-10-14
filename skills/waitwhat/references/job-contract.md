@@ -16,8 +16,9 @@ they create a job dir and run the agent with that dir as cwd.
 
 - Paths inside `request.json` are relative to the job dir.
 - `request.plan` (optional) is the coverage plan made before the job by
-  `references/planning.md`: `{title, est_minutes, outline:[{title, summary}], audience?,
-  question?, asked?:[string], note?, deferred?:[string]}`. `request.answers` (optional) holds the
+  `references/planning.md`: `{title, est_minutes, outline:[{title, summary}], style?, audience?,
+  question?, asked?:[string], note?, deferred?:[string]}`. `style` (`"classic"` | `"25d"`) is
+  copied into `plan.json` as `"style"`. `request.answers` (optional) holds the
   person's answers to clarifying questions: `[{id, q, a}]` (`a` null when skipped). The outline is
   the checklist the video must cover; see the `waitwhat` skill.
 - `request.level` (optional): the depth the person picked, `eli10 | auto | expert | jargon`;
@@ -96,7 +97,8 @@ workspace/
             "say_voice": "Daniel", "say_rate": 182},
   "pronunciations": {"Euler": "Oiler"},
   "aspect": "16:9",                      // from request.aspect: "16:9" | "9:16" (vertical); default 16:9
-  "theme": "classic",                    // the video's world (style guide): classic | studio | chalkboard | blueprint | space | ocean | city | whiteboard | graph_paper | paper | hills; or {"name", "ambient": false}
+  "style": "classic",                    // from request.plan.style: "classic" (3b1b; maths, science, education) | "25d" (illustrated layers + parallax camera; everything else)
+  "theme": "classic",                    // the video's world. classic style (style guide): classic | studio | chalkboard | blueprint | space | ocean | city | whiteboard | graph_paper | paper | hills; or {"name", "ambient": false}. 25d style (references/25d.md): sunny | fresh | dusk
   "palette": {"a": "BLUE", "b": "TEAL", "c": "YELLOW_SOFT", "triangle": "GREY"},  // colour NAMES, so they follow the theme
   "sound": {"music": "calm", "music_db": -17, "sfx": true, "sfx_auto": true, "sfx_db": 0, "intro": true, "outro": true},
   "thumbnail": {"scene": "rearrange", "t": 9.5},
@@ -112,7 +114,8 @@ workspace/
       "transition": "cut",               // how THIS scene is entered: continuous (starts on the previous scene's last frame, no whoosh) | cut
       "energy": "high",                  // delivery + tempo: high | medium | low | reveal | close (optional, default medium)
       "theme": "space",                  // optional: only when the story moves to another place
-      "dim": "3d",                       // optional: a 3D scene (WaitwhatScene3D, manim-scenes references/3d.md); default 2D
+      "dim": "3d",                       // optional, classic style only: a 3D scene (WaitwhatScene3D, manim-scenes references/3d.md); default 2D
+      "backdrop": "city",                // 25d style only: outdoors | city | room | office | plain (the scene's place)
       "lead_in": 0.35                    // optional seconds before narration starts
     }
   ],

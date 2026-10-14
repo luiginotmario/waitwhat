@@ -97,6 +97,8 @@ DEFAULTS = {
     "say_voice": "Daniel",
     "say_rate": 182,
 }
+#: 2.5D videos (plan.style "25d") talk a little faster: ~200-210 wpm with the default voices
+SPEED_25D = 1.15
 # Energy arc presets (scenes[].energy). Speed is relative to the video's voice speed, so the pace
 # stays near the 190-205 wpm target; v3/v4 ignore style/speed and keep only stability.
 ENERGY = {
@@ -1280,6 +1282,9 @@ def main() -> None:
 def run(a: argparse.Namespace, ws: Path, handshake) -> int:
     plan = json.loads((ws / "plan.json").read_text())
     voice = {**DEFAULTS, **(plan.get("voice") or {})}
+    if str(plan.get("style") or "").strip().lower() in ("25d", "2_5d") and \
+            float((plan.get("voice") or {}).get("speed", DEFAULTS["speed"])) == DEFAULTS["speed"]:
+        voice["speed"] = SPEED_25D  # 2.5D narrates brisker (~200-210 wpm) unless the plan picks another speed
     backend = choose_provider(a.backend, voice.get("backend"))
     or_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     el_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()

@@ -75,9 +75,14 @@ _PLAN0 = _read_plan_for_theme()
 THEME, THEME_OPTS = _themes.resolve(_PLAN0, os.environ.get("WAITWHAT_SCENE_ID"))
 _T = _themes.THEMES[THEME]
 _C = _T["colors"]
-THEMES = ("classic", "studio", "chalkboard", "blueprint", "space", "ocean", "city", "whiteboard", "graph_paper", "paper", "hills")
+THEMES = ("classic", "studio", "chalkboard", "blueprint", "space", "ocean", "city", "whiteboard", "graph_paper", "paper", "hills",
+          "sunny", "fresh", "dusk")
 assert set(THEMES) == set(_themes.THEMES)
 IS_DARK = bool(_T["dark"])
+#: the video's visual style (plan.json "style"): "classic" (the 3b1b look) or "25d" (flat illustrated
+#: layers with a parallax camera: WaitwhatScene25D, references/25d.md). Each style has its own themes.
+STYLE = "25d" if _T.get("style") == "25d" else "classic"
+IS_25D = STYLE == "25d"
 
 # --------------------------------------------------------------------------- aspect + frame
 # One render per video, laid out for its aspect from the start (never cropped): WAITWHAT_ASPECT env,
@@ -233,6 +238,27 @@ def _register_fonts() -> tuple[str, str]:
 
 FONT, FONT_HAND = _register_fonts()
 FONT_MONO = "Menlo"
+
+
+def _rounded_font() -> str:
+    """The 2.5D text face: a friendly rounded sans (SF Pro Rounded, else Avenir Next, ...)."""
+    try:
+        import manimpango
+        fonts = set(manimpango.list_fonts())
+    except Exception:  # pragma: no cover
+        return "sans-serif"
+    for f in ("SF Pro Rounded", "Nunito", "Quicksand", "Avenir Next", "Arial Rounded MT Bold", "Helvetica Neue",
+              "DejaVu Sans", "Liberation Sans"):
+        if f in fonts:
+            return f
+    return "sans-serif"
+
+
+#: the classic serif (CMU Serif); in a 2.5D video FONT is the rounded sans and this keeps the serif
+FONT_SERIF = FONT
+FONT_ROUNDED = _rounded_font()
+if IS_25D:
+    FONT = FONT_ROUNDED
 
 # --------------------------------------------------------------------------- easing
 # Entrances ease out (fast start, gentle landing); on-screen moves ease in and out.
@@ -1190,3 +1216,8 @@ class WaitwhatOutro(Scene):
 # WaitwhatScene3D and the 3D helpers (surfaces, solids, exploded layers, cutaways, callouts, camera
 # moves) live in waitwhat_3d.py; importing them here keeps one import for every scene file.
 from waitwhat_3d import *  # noqa: E402,F401,F403
+
+# --------------------------------------------------------------------------- 2.5D
+# WaitwhatScene25D and the 2.5D kit (depth layers + parallax camera, characters, props, backdrops,
+# pop-in motion) live in waitwhat_25d.py; same single import for scene files.
+from waitwhat_25d import *  # noqa: E402,F401,F403

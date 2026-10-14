@@ -1,6 +1,6 @@
 ---
 name: waitwhat
-description: Turn any prompt, attached files, or a company URL into a narrated explainer video in the visual style of 3Blue1Brown (Manim + voice + music → out/video.mp4). Use for "make me a waitwhat video on X", "explain X as a video", "animate an explainer of this paper/company", or whenever the working directory holds a waitwhat job (request.json). Also handles refine requests ("wait, what?" on a paused frame). This is the orchestrator; it calls the storytelling, research, voice, manim-scenes, sound and refine skills.
+description: Turn any prompt, attached files, or a company URL into a narrated explainer video (Manim + voice + music → out/video.mp4), drawn in the 3Blue1Brown style for maths, science and education, or as a flat illustrated 2.5D explainer with a parallax camera for everything else. Use for "make me a waitwhat video on X", "explain X as a video", "animate an explainer of this paper/company", or whenever the working directory holds a waitwhat job (request.json). Also handles refine requests ("wait, what?" on a paused frame). This is the orchestrator; it calls the storytelling, research, voice, manim-scenes, sound and refine skills.
 ---
 
 # waitwhat: prompt → explainer video
@@ -77,8 +77,11 @@ There is no default length; a narrow question makes a short video and a broad on
 
 Write into `workspace/plan.json` (schema in `references/job-contract.md`):
 
-- `outline`, `asked`, `deferred` copied from the request plan (or from your own planning), and
-  `duration_target` = `est_minutes` × 60. Keep `duration_target` honest if your scene plan grows:
+- `outline`, `asked`, `deferred` copied from the request plan (or from your own planning),
+  `duration_target` = `est_minutes` × 60, and **`style`** copied from `request.plan.style`
+  (`"classic"` or `"25d"`; if the request plan has none, decide it by `references/planning.md` §6:
+  classic for maths, science, education and college subjects, 25d for everything else, classic
+  when unsure). Keep `duration_target` honest if your scene plan grows:
   the worker sizes its time limit from it.
 - **Mode**: topic (just a prompt), attachments (explain *this* paper/deck/data), company (the
   prompt is or contains a company URL), refine. A prompt can mix them.
@@ -131,7 +134,18 @@ aren't. Give every scene an `energy` (`high`, `medium`, `low`, `reveal`, `close`
 an arc instead of one flat level: a bright hook, steady build-up, a hush before the insight, a
 lift at the reveal, a calm close.
 
-**2D by default; 3D only where depth explains.** For a physical "how does X work" topic (a device,
+**The style sets the drawing for the whole video** (`plan.style`). In a **`"25d"`** video every
+scene is a `WaitwhatScene25D` (flat illustrated layers, parallax camera, the character kit;
+manim-scenes `references/25d.md`): give each scene a `backdrop` (`outdoors`, `city`, `room`,
+`office`, `plain`) in its plan entry, pick `plan.theme` from the 2.5D palettes (`sunny` default,
+`fresh` for fintech/health/software, `dusk` for evening or dramatic stories), put the story's
+protagonist in `shared.py` (one `cast()` name, e.g. `HERO = "maya"`, used in every scene where a
+person appears), and pace it brisker (storytelling skill, "2.5D pace": scenes of 8-15 s, a new
+visual beat every 2-3 s, `voice.speed` 1.15). Say in each `visual` what the camera does ("push in
+on Maya on 'six hours'", "dolly right with the coin to the bank"). No `"dim": "3d"` in a 2.5D
+video. The next two paragraphs are for the classic style.
+
+**Classic: 2D by default; 3D only where depth explains.** For a physical "how does X work" topic (a device,
 the body, a machine, nature, materials, molecules, planets), mark the one or two scenes whose point
 is a structure in space with `"dim": "3d"`: layers stacked in depth (a touchscreen, skin), an
 inside hidden by an outside (a battery, an earbud, a planet's core), a quantity over a plane (a
@@ -140,8 +154,9 @@ camera that tilts or orbits, flat labels) at the same speed. Everything else sta
 clear 2D cross-section beats a 3D object that only looks impressive. In the scene's `visual`, say
 what the camera does (e.g. "starts flat, tilts on 'layers'; explode; labels one per bookmark").
 
-**Choose the world** (`plan.theme`): one theme for the whole video, matched to the topic (the
-table is in the style guide): `classic` black for math and abstract ideas (the default),
+**Choose the world** (`plan.theme`; classic style; a 2.5D video uses its palettes above): one
+theme for the whole video, matched to the topic (the table is in the style guide): `classic`
+black for math and abstract ideas (the default),
 `chalkboard` for lessons and derivations, `blueprint` for machines and systems, `space` for
 astronomy and scale, `ocean` for life and flows, `paper` or `hills` for stories and history,
 `studio`, `city` or `whiteboard` for companies, products and business, `graph_paper` for data.
@@ -149,8 +164,8 @@ Switch per scene (`scenes[].theme`) only when the story itself moves to another 
 
 Narration comes first and drives everything else. Read the whole narration aloud in your
 head: if a sentence would sound odd spoken by a person, rewrite it. Check the total narration
-against `duration_target` (≈190 words per minute); if you are far off, revisit the scope, not the
-speaking pace.
+against `duration_target` (≈190 words per minute; ≈205 in a 2.5D video); if you are far off,
+revisit the scope, not the speaking pace.
 
 ## 5. Voice: final words, then voice in the background
 

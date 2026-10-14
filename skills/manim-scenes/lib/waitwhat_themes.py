@@ -48,6 +48,13 @@ _INK_ON_LIGHT = {
     "YELLOW": "#B36B00", "YELLOW_SOFT": "#8A6A00",
 }
 
+# 2.5D fills: pastel-but-punchy, saturated enough to read as flat illustration on a light sky.
+_FLAT_COLORS = {
+    "BLUE": "#4D7CFE", "TEAL": "#22B8A7", "PINK": "#F472B6", "GOLD": "#F7B32B", "GREEN": "#4CC27A",
+    "RED": "#F2545B", "PURPLE": "#8B6CF6", "ORANGE": "#FF8A3D", "MAROON": "#C2416B",
+    "YELLOW": "#FFC83D", "YELLOW_SOFT": "#FFE08A",
+}
+
 THEMES: dict[str, dict] = {
     # The 3Blue1Brown house look. Default; best for math.
     "classic": {
@@ -118,14 +125,52 @@ THEMES: dict[str, dict] = {
                    "YELLOW_SOFT": "#7A5C00", "TEAL": "#09695D", "GREEN": "#2A6E2E", "ORANGE": "#A6420A"},
         "write": "pencil", "code_bg": "#DCE7EC", "ambient": "clouds", "floor": -2.6,
     },
+    # ---- 2.5D palettes (plan.style "25d"): the explainer-agency look. Concept colours here are
+    # punchy fills for props and characters; text sits on white pills in dark ink (waitwhat_25d).
+    "sunny": {
+        "about": "2.5D: warm daylight, soft blue sky, green hills; the default 2.5D world",
+        "style": "25d", "dark": False, "bg": "#C9E9FB", "ink": "#1F2A44", "ink_2": "#3F4A66",
+        "ink_3": "#5A6683", "ink_4": "#C3D2E6", "sky": ("#8FCBF5", "#FFF0D9"),
+        "check_bg": ["#8FCBF5", "#FFEBDA", "#E8F2FB", "#FFFFFF"], "fills": True,
+        "colors": _FLAT_COLORS, "write": "click", "code_bg": "#EEF3FB",
+    },
+    "fresh": {
+        "about": "2.5D: cool mint and teal daylight; fintech, health, software, clean products",
+        "style": "25d", "dark": False, "bg": "#C6F1EA", "ink": "#16323A", "ink_2": "#2F4F57",
+        "ink_3": "#4C6B72", "ink_4": "#BFE0DA", "sky": ("#7FD8D0", "#F3FBF4"),
+        "check_bg": ["#7FD8D0", "#E6F6F2", "#EAF6FB", "#FFFFFF"], "fills": True,
+        "colors": {**_FLAT_COLORS, "BLUE": "#3B82F6", "TEAL": "#0FB5A6", "GREEN": "#34C77B"},
+        "write": "click", "code_bg": "#EAF6F3",
+    },
+    "dusk": {
+        "about": "2.5D: evening, violet sky to a peach horizon, lit windows; stories at night, calm or dramatic beats",
+        "style": "25d", "dark": True, "bg": "#2E2A6E", "ink": "#FFFFFF", "ink_2": "#E2DCF5",
+        "ink_3": "#C2B8E6", "ink_4": "#4A4286", "sky": ("#2E2A6E", "#F59A7C"),
+        "check_bg": ["#2E2A6E", "#4A3F86", "#3C3A7E"], "fills": True,
+        "colors": {**_FLAT_COLORS, "YELLOW": "#FFD15C"}, "write": "click", "code_bg": "#26225C",
+    },
 }
+#: the palettes that belong to each visual style (plan.style)
+STYLE_THEMES = {"classic": tuple(n for n in THEMES if THEMES[n].get("style", "classic") == "classic"),
+                "25d": tuple(n for n in THEMES if THEMES[n].get("style") == "25d")}
 DEFAULT_THEME = "classic"
+DEFAULT_25D = "sunny"
 ALIASES = {"default": "classic", "dark": "classic", "3b1b": "classic", "black": "classic",
            "chalk": "chalkboard", "blackboard": "chalkboard", "graph": "graph_paper", "grid": "graph_paper",
            "notebook": "paper", "warm_paper": "paper", "night_sky": "space", "stars": "space",
            "deep_ocean": "ocean", "sea": "ocean", "underwater": "ocean", "drafting": "blueprint",
            "skyline": "city", "night_city": "city", "meadow": "hills", "countryside": "hills",
-           "dark_studio": "studio"}
+           "dark_studio": "studio", "day": "sunny", "daylight": "sunny", "mint": "fresh", "teal": "fresh",
+           "evening": "dusk", "sunset": "dusk", "night": "dusk"}
+
+
+def style_of(plan: dict) -> str:
+    """The video's visual style: "classic" (the 3b1b look; maths, science, education) or "25d"
+    (flat illustrated layers with a parallax camera; everything else). WAITWHAT_STYLE env, then
+    plan.json "style"; anything unknown is classic."""
+    v = os.environ.get("WAITWHAT_STYLE") or (plan or {}).get("style") or "classic"
+    v = str(v).strip().lower().replace(".", "").replace("-", "").replace(" ", "")
+    return "25d" if v in ("25d", "2_5d", "2point5d", "flat", "illustrated") else "classic"
 
 
 def canonical(name: str | None) -> str:
@@ -154,7 +199,15 @@ def resolve(plan: dict, scene_id: str | None) -> tuple[str, dict]:
     env = os.environ.get("WAITWHAT_THEME")
     if env:
         spec = env
-    return canonical(spec if isinstance(spec, str) else None), opts
+    name = canonical(spec if isinstance(spec, str) else None)
+    # each style has its own palettes: a classic theme name in a 2.5D video means its default, and
+    # the other way round, so one style's world never leaks into the other
+    style = style_of(plan)
+    if style == "25d" and THEMES[name].get("style") != "25d":
+        name = DEFAULT_25D
+    elif style == "classic" and THEMES[name].get("style") == "25d":
+        name = DEFAULT_THEME
+    return name, opts
 
 
 # --------------------------------------------------------------------------- colour maths
@@ -186,7 +239,7 @@ def check_contrast(name: str) -> list[str]:
             r = contrast(t[key], bg)
             if r < need:
                 bad.append(f"{name}: {key} {t[key]} on {bg} = {r:.2f} < {need}")
-        for key in COLOR_KEYS:
+        for key in ([] if t.get("fills") else COLOR_KEYS):  # 2.5D colours are fills, text is on pills
             r = contrast(t["colors"][key], bg)
             if r < 3.0:
                 bad.append(f"{name}: {key} {t['colors'][key]} on {bg} = {r:.2f} < 3.0")
@@ -319,7 +372,9 @@ def _paint(name: str, h: int, w: int, u: float, rng) -> tuple[np.ndarray, dict]:
     cx, cy = w / 2, h / 2
     px = min(w, h) / 1080          # sprite scale: the short side, so 9:16 stars are not bigger
     amb: dict = {}
-    if name == "classic":
+    if t.get("style") == "25d":  # WaitwhatScene25D paints its own backdrop; this is the fallback
+        img = _vertical(h, w, t["sky"][0], t["sky"][1])
+    elif name == "classic":
         img = np.zeros((h, w, 3), np.float32) + rgb(t["bg"])
     elif name == "studio":
         img = _radial(h, w, "#202228", "#0B0B0D", cy=0.42, spread=1.1)

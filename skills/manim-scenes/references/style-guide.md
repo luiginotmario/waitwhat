@@ -1,5 +1,10 @@
 # waitwhat house style
 
+This guide is the **classic** style (`plan.style` "classic", the default). A `"25d"` video uses
+`WaitwhatScene25D` and its own look, palettes (`sunny`, `fresh`, `dusk`) and rules:
+`references/25d.md`. Layout helpers, the safe area, the 9:16 rules and sound cues below apply to
+both.
+
 Opacity layers, the safe-area and edge-buffer rules and semantic colour come from the visual
 design rules in AmitSubhash/3brown1blue and the Hermes Agent manim-video skill (both MIT);
 see THIRD_PARTY.md.

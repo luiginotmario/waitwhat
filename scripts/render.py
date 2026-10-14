@@ -125,8 +125,10 @@ def content_hash(ws: Path, sid: str, quality: str, fps: int) -> str:
                    if f'"{k}"' in code_text or f"'{k}'" in code_text}
             entry = [s for s in plan.get("scenes", []) if s.get("id") == sid]
             # the theme repaints every pixel; the title seeds its background texture
-            look = [plan.get("theme"), plan.get("title") if plan.get("theme") else None,
+            look = [plan.get("theme"), plan.get("title") if plan.get("theme") or plan.get("style") else None,
                     os.environ.get("WAITWHAT_THEME")]
+            if plan.get("style"):  # the visual style changes every pixel (2.5D: also the backdrop's seed)
+                look.append(plan.get("style"))
             h.update(json.dumps([pal, entry, look], sort_keys=True).encode())
         except Exception:
             h.update(plan_f.read_bytes())

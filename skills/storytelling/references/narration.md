@@ -69,6 +69,8 @@ sentence. Never stack two new terms in one sentence.
 ## Pace and pauses
 - Narrate at about **190 words per minute**, a lively conversational pace (the voice skill's
   default speed of 1.12 lands here; 1.0 is noticeably slower). A 20 s scene holds about 60 to 65 words.
+- In a **2.5D video** (`"style": "25d"`), about **200-210 words per minute** (speed 1.15) and
+  scenes of 8-15 s: a 12 s scene holds about 40 words, with 3-5 bookmarks (a beat every 2-3 s).
 - Pauses come from punctuation: commas, full stops and paragraph breaks already give the voice
   natural breath. Don't put `<break>` tags between ordinary beats.
 - Use at most about one deliberate long pause per minute, at a real reveal or right after the

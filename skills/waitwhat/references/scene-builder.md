@@ -39,6 +39,23 @@ Bash as the scene code: `ww narrate <id> <<'EOF'` … `EOF` (saves it and voices
 seconds) `&& cat > workspace/scenes/<id>.py <<'EOF'` … `EOF` `&& ww render <id>`. Never edit
 plan.json directly: other builders are writing their narration into it at the same time.
 
+## 2.5D videos (`"style": "25d"` in plan.json)
+
+If `ww brief` says `"style": "25d"` (its `read_first` is `references/25d.md`), the whole video is
+the illustrated 2.5D style: Read `<plugin>/skills/manim-scenes/references/25d.md` in your first
+turn, together with `ww brief` and `shared.py`, and copy the closest 2.5D template
+(`story_problem.py`, `service_flow.py`, `city_overview.py`, `before_after.py`). Then the loop is
+the same, with these differences:
+- `class X(WaitwhatScene25D)` with `backdrop = "<your plan entry's backdrop>"`; never
+  `WaitwhatScene` or `WaitwhatScene3D`, no `Write`/pencil circle/LaTeX board.
+- People are `cast(...)` with the name from `shared.py` (the protagonist looks the same in every
+  scene); things are the props; text sits on `pill`/`tag`/`bubble`/`headline`.
+- Brisk: a new visual beat every 2-3 s (pop-ins, pose/face changes, a camera move, something
+  travelling), each on its bookmark; one camera move per idea (`push_in`, `pan_to`, `dolly`).
+- Things that interact share a depth; labels go through `tag()`/`self.in_view()` so they stay
+  in frame after a camera move.
+- A 2.5D render takes 4-10 s; a "render budget" issue means fewer shapes or a narrower backdrop.
+
 ## 3D scenes (`"dim": "3d"` in your plan entry)
 
 Most scenes are 2D. If yours is marked `"dim": "3d"` (`ww brief` shows it, and the director's

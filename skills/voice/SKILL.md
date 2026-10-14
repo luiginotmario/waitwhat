@@ -70,7 +70,10 @@ accent, language, a named voice). For non-English videos, set `plan.voice.langua
 and write the narration in that language.
 
 `plan.voice` defaults: `voice_id` `brian`, `model_id` as above, `stability` 0.45,
-`similarity_boost` 0.8, `style` 0.15, `speed` 1.12, `max_pause` 0.7. Add `seed` (an integer)
+`similarity_boost` 0.8, `style` 0.15, `speed` 1.12, `max_pause` 0.7. A **2.5D video**
+(`plan.style` `"25d"`) defaults to `speed` **1.15** (~200-210 wpm; `tts.py` applies it when the
+plan leaves the speed at the default), and suits the bright, conversational voices (`eric`,
+`sarah`, `chris`/`roger` at 1.08, `jessica` for playful topics). Add `seed` (an integer)
 for repeatable takes.
 
 ## Delivery direction
