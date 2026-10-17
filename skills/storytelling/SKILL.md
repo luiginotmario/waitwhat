@@ -11,27 +11,36 @@ idea themselves. Everything below serves that.
 ## The non-negotiables
 
 1. **Hook in the first 5 seconds.** Open on the most surprising true thing, a puzzle, or a
-   picture that begs a question. Never open with a definition, an agenda or "In this video".
+   picture that begs a question. Never open *cold* on a dictionary definition, an agenda or
+   "In this video".
    - Weak: "The Pythagorean theorem states that a² + b² = c²."
    - Strong: "Draw any right triangle you like. Build a square on each side. The two small
      squares *always* hold exactly as much as the big one. Why on earth would that be?"
-2. **One concrete question** carries the whole video, stated early in the viewer's words. Every
+2. **Say what the thing is, right after the hook.** When the request is about a thing ("what is
+   X?", "how does X work?", "explain X"), answer *what X is* within the first ~20 seconds, before
+   what it does or how it works inside: what kind of thing it is, where it came from, and its one
+   key idea, in plain everyday words at the asker's level. "A transformer is a kind of AI model,
+   invented in 2017, that reads a whole sentence at once and works out how every word relates to
+   every other word, instead of reading one word at a time." The viewer should be able to stop
+   after that sentence and tell a friend what X is. Behaviour ("you give it text, it guesses the
+   next word") and mechanism come after.
+3. **One concrete question** carries the whole video, stated early in the viewer's words. Every
    scene either sharpens it, gathers what is needed to answer it, or answers it.
-3. **Intuition before formalism.** Show the picture, let the viewer notice the pattern, *then*
+4. **Intuition before formalism.** Show the picture, let the viewer notice the pattern, *then*
    name it. Notation arrives as a summary of something already understood. Concrete numbers
    before variables; a specific example before the general case.
-4. **One idea per scene.** If a scene needs "and also", split it. Each scene answers one small
+5. **One idea per scene.** If a scene needs "and also", split it. Each scene answers one small
    question (write it in `plan.scenes[].goal`).
-5. **Continuity: transform, don't cut.** Objects persist and morph between scenes; the last
+6. **Continuity: transform, don't cut.** Objects persist and morph between scenes; the last
    frame of one scene is the first frame of the next (`"transition": "continuous"`). Cut only
    for a true change of subject.
-6. **A colour means one thing for the whole video.** Assign concept colours once in
+7. **A colour means one thing for the whole video.** Assign concept colours once in
    `plan.palette` and never reuse a colour for something else. Yellow is reserved for "look here".
-7. **Pauses come from punctuation, plus one real beat where it counts.** Flowing sentences
+8. **Pauses come from punctuation, plus one real beat where it counts.** Flowing sentences
    already breathe at commas and full stops, so don't sprinkle `<break>` tags between beats. Save
    a deliberate pause (at most about one per minute, ≤ `<break time="1.2s"/>`) for a real reveal
    or the key question; for longer silence, hold a strong picture on screen instead.
-8. **Cover everything the request needs, and nothing it doesn't.** The coverage plan
+9. **Cover everything the request needs, and nothing it doesn't.** The coverage plan
    (`plan.outline` in request.json, see the waitwhat skill) is the checklist: every item gets
    at least one scene, in order, and nothing outside it gets screen time. Length follows from
    that (about 190 spoken words per minute; scenes are typically 10–25 s; a 2.5D video runs
@@ -41,7 +50,8 @@ idea themselves. Everything below serves that.
 
 ## Shape of a good video
 
-Hook (puzzle or surprising claim) → the question in plain words → build the minimum intuition
+Hook (puzzle or surprising claim) → what the thing is, in one plain sentence (for "what is / how
+does X work") → the question in plain words → build the minimum intuition
 with one rich example → the aha (a single visual moment where it clicks) → name it, generalise,
 maybe one formula → why it matters / a surprising application → a closing line that echoes the
 hook. Not every topic fits; pick an arc from `references/arcs.md` that suits it.

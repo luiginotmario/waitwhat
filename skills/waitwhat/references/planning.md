@@ -79,7 +79,14 @@ prerequisites as their own outline items, placed before the step that uses them.
 
 Order the outline the way the explanation should unfold: hook and the question first, then
 prerequisites just before they're needed, building to the main idea, then consequences or
-applications if asked for. Each outline item is one coherent chunk of the explanation (usually
+applications if asked for.
+
+**What it is, first.** When the request is about a thing ("what is X?", "how does X work?",
+"explain X"), the first item after the hook says plainly *what X is*: what kind of thing it is,
+where it came from, and its one key idea, in everyday words at the asker's level (e.g. "What a
+transformer is: an AI model from 2017 that reads a whole sentence at once and relates every word to
+every other word"). Only then what it does, then how it works inside. Never let a video about X
+explain X's behaviour or parts without first saying what X is. Each outline item is one coherent chunk of the explanation (usually
 one to three scenes later), with a title a viewer would understand and a one-sentence summary of
 what it establishes.
 
