@@ -115,6 +115,18 @@ The tension must come from the record, never be manufactured. Every name, date, 
 must be verified (`waitwhat:research`); if the story can't be verified, tell the problem instead.
 The story serves the explanation: keep it to the beats that make the idea land, then go deep.
 
+## X posts and threads
+
+When the job's research holds an X conversation (`workspace/research/`, a document starting "X
+CONVERSATION"), the video explains the ★ post(s) in the context of the conversation, in about a minute:
+the situation in one line (who answers whom, about what), the core claims, where they agree and differ,
+the bottom line; one to two minutes at most. When a post lists many points, show the whole list in one
+beat and spend the time on the 2 or 3 that carry the argument. Make it hyper-concrete: draw the actual items, numbers and names from the posts (each
+listed point as its own labelled card, the two sides' lists facing each other, a timeline of who said
+what when), not metaphors. Attribute every claim to its author by name and role, present each side at
+its strongest, add no opinion of your own, and keep quotes to short phrases. Skip the long hook: open on
+the situation itself.
+
 ## Energy and pacing
 
 Give each scene an `energy` so the video has an arc: `high` (the hook, a turning point),
