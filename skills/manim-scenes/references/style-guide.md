@@ -164,8 +164,9 @@ the screen. Compose for that from the start; never shrink a landscape layout int
 - Emphasis: `pencil_circle(m)` + `Create` for the key thing; `pulse(shape)` (fill brightens and
   settles) for regions; `focus(m)` (Circumscribe) only for text or compact groups, since it draws
   an axis-aligned box. One emphasis at a time.
-- Rhythm: after a reveal, hold (`self.wait(1–2)`) while the narration lands. Silence with a strong
-  picture is part of the style.
+- Rhythm: after a reveal, a short hold (`self.wait(0.5–1)`) while the narration lands; keep the
+  longer, silent hold for the one aha of the video. Once a scene's point has landed, end it: no
+  extra seconds on a finished picture.
 
 ## Alive, not busy
 

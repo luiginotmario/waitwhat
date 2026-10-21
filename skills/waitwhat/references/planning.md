@@ -100,7 +100,9 @@ shorter scenes). Budget roughly:
 - a closing payoff: 0.3 min.
 
 `est_minutes` is the sum, rounded to the nearest half minute (minimum 1). Be honest: a long
-subject gets a long estimate. If the person asked for a specific length, plan to that length and
+subject gets a long estimate. But lean tight: budget each idea at the low end unless it truly
+needs the worked example, and cut any item the question doesn't depend on. Concise and brisk beats
+thorough and slow. If the person asked for a specific length, plan to that length and
 scope the outline to fit it.
 
 ## 6. Choose the visual style
@@ -127,9 +129,10 @@ When the request carries an `<x_conversation>` (one or more pasted X posts, expa
 reply to and quote), the video explains **what the ★ post says, in the context of the conversation it
 answers**, as briefly as that allows. People paste a post because they don't want to read the thread.
 
-- **Short and hyper-focused.** `est_minutes` 1 for most posts, **at most 2** even for a long, dense
-  exchange; never pad. 3 to 5 outline items. Keep only what someone needs to grasp the point; drop
-  asides, pleasantries and repetition.
+- **Short and hyper-focused.** Aim for `est_minutes` 1 to 1.5 and 3 to 5 outline items. That is the
+  direction, not a limit: when the conversation genuinely needs more to make sense, take the time it
+  needs, but never pad. Keep only what someone needs to grasp the point; drop asides, pleasantries
+  and repetition.
 - **Lists: show them at once, then zoom in.** When a post lists many points, never walk through them one
   by one: show the whole list in a single beat, then spend the time on the 2 or 3 that carry the
   argument (the ones conceded, contested, or that decide who is right).
