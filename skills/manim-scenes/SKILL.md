@@ -42,6 +42,10 @@ class Squares(WaitwhatScene):
 - Few words on screen: labels, a formula, a key number. The narration carries sentences.
 - Big and calm: one focal object filling 50–70 % of the frame, generous margins, nothing within
   0.5 units of the edge, text never below `SIZE_SMALL`.
+- Or, when the story calls for it, a deliberate **dense frame** (storytelling: "Hyper-concrete"):
+  one composed picture of a real case with many labelled parts. Build it up piece by piece so each
+  part lands on its word, keep every label at `SIZE_SMALL` or larger, and guide the eye through it
+  with `dim(...)`, camera moves and the pencil circle instead of cutting to new scenes.
 - Two aspects, one render each: 16:9 (default) or vertical 9:16 (`plan.aspect`; `ww render`
   prints `"aspect": "9:16"`). Lay scenes out with the adaptive helpers (`place_title`,
   `side_by_side`, `flow`, `spots`, `fit_safe`, `by_aspect`, `MAIN`) instead of hard-coded

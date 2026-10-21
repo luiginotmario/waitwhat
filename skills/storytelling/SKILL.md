@@ -48,6 +48,20 @@ idea themselves. Everything below serves that.
    is a short video and a broad one is a long one. Tight beats padded at every length: cut
    tangents and repetition, never a needed step.
 
+## Hyper-concrete, not abstract
+
+Explain through one specific, tangible case shown literally: real names, numbers and objects, labelled
+parts, and cause and effect you can watch happen. Not a generic diagram, not a metaphor. Instead of two
+boxes labelled "agent A" and "agent B", show the actual refund request moving from the support agent to
+the billing agent, the amount written on it, and what changes when it lands. Generalise only once the
+case is clear.
+
+When the material suits it (a system with many parts, a list of specifics, two positions side by side),
+prefer **one or a few carefully composed, information-rich frames** that build up and stay on screen,
+walked through with the camera, dimming and the pencil circle, over many light scenes. When the idea is
+a single step or a surprise, keep the usual one-focal-object scene. It's a judgement per video, not a
+rule.
+
 ## Shape of a good video
 
 Hook (puzzle or surprising claim) → what the thing is, in one plain sentence (for "what is / how
