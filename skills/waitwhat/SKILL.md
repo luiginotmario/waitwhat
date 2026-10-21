@@ -37,6 +37,14 @@ in ~10 s). Every turn you take is on the critical path, and so is every token yo
 - **Someone asks in chat** ("make me a waitwhat video on X"): run `ww new "<their prompt>"
   [--attach files]`, which creates `./waitwhat-videos/<slug>/` with a contract-shaped
   `request.json`, then work inside that dir. At the end, `open out/video.mp4`.
+  **First, the narrator key** (chat only; the worker always has one): if neither
+  `OPENROUTER_API_KEY` nor `ELEVENLABS_API_KEY` is set, ask the person once, before planning.
+  The easy path is one OpenRouter key (sign up at https://openrouter.ai, create a key at
+  https://openrouter.ai/settings/keys, add a few dollars of credits; narration for a video costs
+  cents); an ElevenLabs key works too. Suggest they add it to their shell profile
+  (`export OPENROUTER_API_KEY=...`). If they paste it in chat, pass it only in the environment of
+  the commands you run; never write it into a file. Only if they decline, use macOS `say` (robotic,
+  and say so).
 - **A refine** (`request.json` has `refine`, or the user says "wait, what?" about a video):
   load the `waitwhat:refine` skill and follow it instead of planning from scratch.
 
