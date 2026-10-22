@@ -117,6 +117,10 @@ waitwhat draws in one of two styles, chosen once for the whole video. Put it in 
   works (payments, delivery, streaming), everyday "how/why" questions, history and stories,
   business and money concepts, how-to and life topics.
 
+**Real people, news and X posts are always `"classic"`.** When the video is about named real people
+(a founder, a politician, a poster), a news story, or a pasted X post, use `classic`: the 25d character
+is a made-up person and must never stand in for, or be labelled as, someone real.
+
 When a request sits between the two, decide by what the explanation leans on: equations, graphs
 and mechanisms that need precision → `classic`; people, places, services and stories → `25d`.
 **When unsure, use `"classic"`.** "What does stripe.com do?" is `25d`; "How does public-key
