@@ -3,7 +3,7 @@
 
   fetch.py https://example.com            → workspace/research/example-com.md (prints the path)
   fetch.py https://example.com/pricing -o workspace/research/pricing.md
-  fetch.py --search "acme payroll api pricing"   (Jina search; needs JINA_API_KEY)
+  fetch.py --search "acme payroll api pricing"   (web search through OpenRouter: OPENROUTER_API_KEY)
   fetch.py URL URL ... --search "q1" --search "q2"   # everything at once, fetched in parallel
 
 Give every URL and search of a research round in ONE call: they are fetched concurrently (one
@@ -16,6 +16,7 @@ Stdlib only.
 from __future__ import annotations
 
 import argparse
+import json
 import concurrent.futures as cf
 import os
 import re
@@ -71,6 +72,37 @@ def slug_for_url(url: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", re.sub(r"https?://(www\.)?", "", url.lower())).strip("-")[:60]
 
 
+SEARCH_MODEL = os.environ.get("WAITWHAT_SEARCH_MODEL", "anthropic/claude-haiku-5.5")
+
+
+def openrouter_search(query: str, key: str) -> str:
+    """A web search through OpenRouter's built-in web plugin: the findings with their sources, as markdown."""
+    body = json.dumps({
+        "model": SEARCH_MODEL,
+        "max_tokens": 3000,
+        "reasoning": {"effort": "low"},
+        "plugins": [{"id": "web", "max_results": 8}],
+        "messages": [{"role": "user", "content": (
+            f"Web search: {query}\n\nList every relevant fact you find (names, numbers, dates, quotes), most "
+            "important first, each followed by its source URL. Say where sources disagree. No preamble.")}],
+    }).encode()
+    req = urllib.request.Request(
+        "https://openrouter.ai/api/v1/chat/completions", data=body,
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "X-Title": "waitwhat"})
+    with urllib.request.urlopen(req, timeout=90, context=SSL_CTX) as r:
+        data = json.load(r)
+    msg = data["choices"][0]["message"]
+    seen, sources = set(), []
+    for a in msg.get("annotations") or []:
+        c = a.get("url_citation") or {}
+        url = c.get("url")
+        if url and url not in seen:
+            seen.add(url)
+            sources.append(f"- {c.get('title') or url}: {url}\n  {(c.get('content') or '').strip()[:400]}")
+    text = (msg.get("content") or "").strip()
+    return text + ("\n\n## Sources\n" + "\n".join(sources) if sources else "")
+
+
 def fetch_one(kind: str, what: str, out: Path | None, ws: Path, headers: dict, force: bool) -> str:
     if kind == "search":
         source = f"search: {what}"
@@ -83,7 +115,11 @@ def fetch_one(kind: str, what: str, out: Path | None, ws: Path, headers: dict, f
     out = out or ws / "research" / f"{slug}.md"
     if out.exists() and not force and out.stat().st_size > 200:
         return f"{out}  (already fetched, {out.stat().st_size:,} bytes)"
-    text = get(url, headers)
+    or_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if kind == "search" and or_key:
+        text = openrouter_search(what, or_key)
+    else:
+        text = get(url, headers)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(f"<!-- source: {source} | fetched: {time.strftime('%Y-%m-%d %H:%M')} -->\n\n{text}")
     return f"{out}  ({len(text):,} chars)"
@@ -102,8 +138,8 @@ def main() -> None:
     key = os.environ.get("JINA_API_KEY", "").strip()
     if key:
         headers["Authorization"] = f"Bearer {key}"
-    if a.search and not key:
-        sys.exit("fetch: --search needs JINA_API_KEY")
+    if a.search and not key and not os.environ.get("OPENROUTER_API_KEY", "").strip():
+        sys.exit("fetch: --search needs OPENROUTER_API_KEY (web search through OpenRouter)")
     jobs = [("url", u) for u in a.url] + [("search", q) for q in a.search]
     if not jobs:
         ap.error("give a url or --search")

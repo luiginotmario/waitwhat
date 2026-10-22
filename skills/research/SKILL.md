@@ -13,7 +13,11 @@ leave it out or say plainly that it's uncertain. Simplifying is fine; inventing 
 - `ww fetch <url>` → `workspace/research/<slug>.md` via Jina Reader (`https://r.jina.ai/<url>`,
   `JINA_API_KEY` optional for higher limits). Works for web pages and online PDFs. Each file
   records its source URL and fetch time.
-- Web search (your WebSearch tool; or `ww fetch --search "…"` when `JINA_API_KEY` is set).
+- Web search: `ww fetch --search "…"` (live web search through OpenRouter on `OPENROUTER_API_KEY`;
+  the findings and their source URLs are saved to `workspace/research/search-*.md`). Several searches
+  in one call run in parallel. Use it for anything recent or anything you aren't sure of.
+- `workspace/research/` may already hold the planner's web findings (facts it found online, with
+  sources) and pages it read: start from them.
 - Attachments in `inputs/`: read them directly (PDF, images, text). They are the primary source
   when present; the video explains *them*, not the general topic.
 

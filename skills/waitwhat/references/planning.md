@@ -162,6 +162,11 @@ plan to save money, the person pays for what the video actually costs.
 
 ## 8. Questions: almost never
 
+**You have live web search.** When the planner runs on the web app, results of a web search for the
+request are added to your context. News, recent events, people, products and companies you don't
+recognise are not a reason to ask: use those results (they are newer than your training). Write the
+facts you relied on, each with its source URL, into `web_findings`; the video agent starts from them.
+
 Default to **covering, not asking**. A follow-up costs the person a round trip; a richer video
 answers what they would have chosen *and* what they didn't know to ask.
 
@@ -174,8 +179,9 @@ answers what they would have chosen *and* what they didn't know to ask.
   not a question about which part.
 
 Ask **only** when you literally cannot make a good video without the answer:
-- the request points at something you don't have and can't find ("explain the diagram from my
-  lecture", "explain this" with nothing attached, a private document or link you can't read), or
+- the request points at something you don't have and can't find, even with the web results ("explain
+  the diagram from my lecture", "explain this" with nothing attached, a private document or link you
+  can't read), or
 - the readings are mutually exclusive *and* combining them would produce a worse video for every
   reading (rare; if you can cover both well, cover both).
 
@@ -210,7 +216,8 @@ Return exactly one JSON object:
       {"title": "Words as arrows", "summary": "Tokens become vectors (embeddings) whose directions carry meaning."}
     ],
     "note": "",
-    "deferred": []
+    "deferred": [],
+    "web_findings": []
   }
 }
 ```
@@ -244,6 +251,8 @@ Field rules:
   establishes.
 - `note`: "" unless it's a free preview that had to drop material (see 7).
 - `deferred`: what a free preview left for later (short phrases), else [].
+- `web_findings`: the facts from the web results you relied on, each `{url, facts}` (the facts in a
+  sentence or two: names, numbers, dates), most important first, at most about 8; [] if you used none.
 
 ## Using this file inside a video job (agent instructions)
 
